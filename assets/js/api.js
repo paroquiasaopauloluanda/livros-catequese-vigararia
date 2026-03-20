@@ -9,6 +9,7 @@ const API = (() => {
 
   // ─── Verifica se o Spreadsheet ID está configurado ───────────────────────
   function _isConfigured() {
+    console.log("CONFIG.SPREADSHEET_ID",CONFIG.SPREADSHEET_ID);
     return CONFIG.SPREADSHEET_ID &&
            CONFIG.SPREADSHEET_ID !== '1eMk0WvkFbsj3knT3WnnGJNK1uyT1FyA-Y98Km7RPF3A' &&
            CONFIG.SPREADSHEET_ID.length > 10;
