@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diagnóstico — Catequese Vigararia</title>
+  <style>
+    body { font-family: monospace; background: #0f1117; color: #e2e8f0; padding: 24px; margin: 0; }
+    h1   { color: #90cdf4; margin-bottom: 4px; font-size: 18px; }
+    h2   { color: #68d391; font-size: 14px; margin: 24px 0 8px; border-top: 1px solid #2d3748; padding-top: 12px; }
+    .box { background: #1a202c; border: 1px solid #2d3748; border-radius: 8px; padding: 14px; margin-bottom: 12px; font-size: 12px; line-height: 1.7; overflow-x: auto; }
+    .ok   { color: #68d391; }
+    .err  { color: #fc8181; }
+    .warn { color: #f6ad55; }
+    .info { color: #90cdf4; }
+    .val  { color: #faf089; }
+    .row  { color: #e2e8f0; border-bottom: 1px solid #2d3748; padding: 4px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th    { background: #2d3748; padding: 6px 10px; text-align: left; color: #90cdf4; }
+    td    { padding: 5px 10px; border-bottom: 1px solid #2d3748; }
+    .btn  { background: #2b6cb0; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 13px; margin-right: 8px; margin-top: 16px; }
+    .btn:hover { background: #3182ce; }
+    .badge { display:inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+    .badge-ok  { background:#276749; color:#68d391; }
+    .badge-err { background:#742a2a; color:#fc8181; }
+    #log  { white-space: pre-wrap; font-size: 11px; }
+  </style>
+</head>
+<body>
+
+<h1>🔍 Diagnóstico — Catequese Vigararia</h1>
+<p style="color:#718096;font-size:12px;">Esta página testa a ligação ao Google Sheets e mostra exactamente o que está a ser recebido.</p>
+
+<div class="box">
+  <span class="info">Spreadsheet ID configurado:</span>
+  <span class="val" id="sheetId">—</span>
+  <br>
+  <span class="info">URL do endpoint Users:</span>
+  <span class="val" id="endpointUrl" style="word-break:break-all;">—</span>
+</div>
+
+<button class="btn" onclick="runDiag()">▶ Executar Diagnóstico</button>
+<button class="btn" onclick="testLogin()">🔑 Testar Login (admin/admin123)</button>
+<button class="btn" onclick="clearAllCache()">🗑 Limpar Cache Local</button>
+
+<h2>Log de diagnóstico</h2>
+<div class="box" id="log">A aguardar…</div>
+
+<div id="usersSection" style="display:none;">
+  <h2>Utilizadores encontrados na sheet</h2>
+  <div class="box" id="usersTable"></div>
+</div>
+
+<div id="rawSection" style="display:none;">
+  <h2>Resposta raw do Google Sheets (primeiros 800 chars)</h2>
+  <div class="box" style="color:#a0aec0;" id="rawOutput"></div>
+</div>
+
+<script src="assets/js/config.js"></script>
+<script>
+const log_el = document.getElementById('log');
+let logText  = '';
+
+function log(msg, cls = '') {
+  const now = new Date().toISOString().slice(11,23);
+  const line = `[${now}] ${msg}\n`;
+  logText += line;
+  log_el.innerHTML = logText
+    .replace(/\[OK\]/g,   '<span class="ok">[OK]</span>')
+    .replace(/\[ERR\]/g,  '<span class="err">[ERR]</span>')
+    .replace(/\[WARN\]/g, '<span class="warn">[WARN]</span>')
+    .replace(/\[INFO\]/g, '<span class="info">[INFO]</span>');
+}
+
+function clearAllCache() {
+  const keys = Object.keys(localStorage).filter(k => k.startsWith('cvs_'));
+  keys.forEach(k => localStorage.removeItem(k));
+  log(`[OK] Cache local limpo — ${keys.length} entradas removidas`);
+}
+
+document.getElementById('sheetId').textContent = CONFIG.SPREADSHEET_ID;
+
+const usersUrl = `${CONFIG.SHEETS_BASE}${encodeURIComponent(CONFIG.SHEETS.USERS)}`;
+document.getElementById('endpointUrl').textContent = usersUrl;
+
+async function runDiag() {
+  logText = '';
+  log('[INFO] A iniciar diagnóstico…');
+  log(`[INFO] Spreadsheet ID: ${CONFIG.SPREADSHEET_ID}`);
+  log(`[INFO] Sheet Users nome: "${CONFIG.SHEETS.USERS}"`);
+
+  if (!CONFIG.SPREADSHEET_ID || CONFIG.SPREADSHEET_ID.includes('COLE')) {
+    log('[ERR] SPREADSHEET_ID não está configurado no config.js!');
+    return;
+  }
+
+  log(`[INFO] URL: ${usersUrl}`);
+  log('[INFO] A fazer fetch…');
+
+  try {
+    const resp = await fetch(usersUrl);
+    log(`[INFO] HTTP status: ${resp.status} ${resp.statusText}`);
+
+    if (!resp.ok) {
+      log(`[ERR] Resposta HTTP com erro. A planilha pode não estar pública.`);
+      log('[WARN] Vai ao Google Sheets → Partilhar → "Qualquer pessoa com o link" → Visualizador');
+      return;
+    }
+
+    const raw = await resp.text();
+    log(`[OK] Resposta recebida (${raw.length} chars)`);
+
+    document.getElementById('rawSection').style.display = '';
+    document.getElementById('rawOutput').textContent = raw.slice(0, 800) + (raw.length > 800 ? '\n… (truncado)' : '');
+
+    // Parse
+    let json;
+    try {
+      const jsonStr = raw.replace(/^\s*\/\*[^*]*\*+(?:[^/*][^*]*\*+)*\/\s*/, '').replace(/^[^(]*\(/, '').replace(/\);\s*$/, '').trim();
+      json = JSON.parse(jsonStr);
+      log('[OK] JSON parsed com sucesso');
+    } catch(e) {
+      log(`[ERR] Falha ao fazer parse do JSON: ${e.message}`);
+      log('[WARN] Verifica se a sheet "Users" existe e tem dados');
+      return;
+    }
+
+    if (!json.table) {
+      log('[ERR] Resposta JSON não tem campo "table"');
+      log('[WARN] Verifica se a sheet se chama exactamente "Users" (maiúscula no U)');
+      return;
+    }
+
+    const cols = json.table.cols.map(c => c.label || c.id || '?');
+    log(`[OK] Colunas detectadas (${cols.length}): ${cols.join(' | ')}`);
+
+    // Verifica colunas críticas
+    const colsLower = cols.map(c => c.toLowerCase());
+    ['username', 'password', 'role', 'status'].forEach(req => {
+      if (colsLower.includes(req)) {
+        log(`[OK] Coluna "${req}" encontrada`);
+      } else {
+        log(`[ERR] Coluna "${req}" NÃO encontrada! (colunas disponíveis: ${cols.join(', ')})`);
+      }
+    });
+
+    const rows = json.table.rows || [];
+    log(`[INFO] Número de linhas de dados: ${rows.length}`);
+
+    if (rows.length === 0) {
+      log('[WARN] A sheet "Users" não tem linhas de dados. Adiciona utilizadores na planilha.');
+      return;
+    }
+
+    // Mostra utilizadores
+    const users = rows
+      .filter(r => r && r.c && r.c.some(c => c && c.v))
+      .map(r => {
+        const obj = {};
+        cols.forEach((col, i) => {
+          const cell = r.c && r.c[i];
+          obj[col] = cell ? (cell.f || cell.v || '') : '';
+        });
+        return obj;
+      });
+
+    log(`[OK] ${users.length} utilizadores encontrados`);
+
+    document.getElementById('usersSection').style.display = '';
+    const colsToShow = cols.filter(c => c.toLowerCase() !== 'password');
+    document.getElementById('usersTable').innerHTML = `
+      <table>
+        <thead><tr>${colsToShow.map(c => `<th>${c}</th>`).join('')}<th>password (mascarada)</th></tr></thead>
+        <tbody>${users.map(u => `<tr>${colsToShow.map(c => `<td>${u[c] || '—'}</td>`).join('')}<td>••••••</td></tr>`).join('')}</tbody>
+      </table>`;
+
+    users.forEach((u, i) => {
+      const uname = String(u[cols.find(c => c.toLowerCase() === 'username')] || '').trim();
+      const pass  = String(u[cols.find(c => c.toLowerCase() === 'password')] || '').trim();
+      const role  = String(u[cols.find(c => c.toLowerCase() === 'role')]     || '').trim();
+      log(`[INFO] User[${i}]: username="${uname}" role="${role}" password_len=${pass.length}`);
+    });
+
+  } catch(err) {
+    log(`[ERR] Excepção: ${err.message}`);
+    if (err.message.includes('NetworkError') || err.message.includes('Failed to fetch')) {
+      log('[WARN] Erro de rede — possivelmente CORS. Tenta aceder directamente ao URL:');
+      log(`       ${usersUrl}`);
+    }
+  }
+}
+
+async function testLogin() {
+  log('[INFO] A testar login com admin/admin123…');
+
+  const usersUrl = `${CONFIG.SHEETS_BASE}${encodeURIComponent(CONFIG.SHEETS.USERS)}`;
+  try {
+    const resp = await fetch(usersUrl);
+    const raw  = await resp.text();
+    const jsonStr = raw.replace(/^\s*\/\*[^*]*\*+(?:[^/*][^*]*\*+)*\/\s*/, '').replace(/^[^(]*\(/, '').replace(/\);\s*$/, '').trim();
+    const json = JSON.parse(jsonStr);
+    const cols = json.table.cols.map(c => (c.label || c.id || '').toLowerCase().trim());
+    const uIdx = cols.indexOf('username');
+    const pIdx = cols.indexOf('password');
+    const rIdx = cols.indexOf('role');
+    const sIdx = cols.indexOf('status');
+
+    log(`[INFO] Índice das colunas — username:${uIdx} password:${pIdx} role:${rIdx} status:${sIdx}`);
+
+    const rows = (json.table.rows || []).filter(r => r && r.c && r.c.some(c => c && c.v));
+    let found = false;
+
+    rows.forEach((r, i) => {
+      const getVal = idx => idx >= 0 && r.c[idx] ? String(r.c[idx].f || r.c[idx].v || '').trim() : '';
+      const uname = getVal(uIdx).toLowerCase();
+      const pass  = getVal(pIdx);
+
+      if (uname === 'admin') {
+        log(`[OK] Linha ${i}: username="admin" password="${pass}" role="${getVal(rIdx)}" status="${getVal(sIdx)}"`);
+        if (pass === 'admin123') {
+          log('[OK] ✅ Password "admin123" corresponde! Login devia funcionar.');
+        } else {
+          log(`[ERR] ❌ Password na sheet é "${pass}" mas foi tentado "admin123". Corrige na planilha.`);
+        }
+        found = true;
+      }
+    });
+
+    if (!found) {
+      log('[ERR] Utilizador "admin" não encontrado na sheet Users!');
+      log('[WARN] Adiciona uma linha com: username=admin password=admin123 role=admin parish_id=ALL status=active');
+    }
+
+  } catch(e) {
+    log(`[ERR] Falha no teste de login: ${e.message}`);
+  }
+}
+</script>
+</body>
+</html>
