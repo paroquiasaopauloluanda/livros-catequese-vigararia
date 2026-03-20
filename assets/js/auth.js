@@ -41,6 +41,7 @@ const Auth = (() => {
   async function login(username, password) {
     try {
       const users = await API.fetchSheet(CONFIG.SHEETS.USERS);
+      console.log("users",users);
       const user = users.find(
         u => u.username === username.trim() && u.password === password
       );
