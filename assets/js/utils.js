@@ -115,9 +115,12 @@ const Utils = (() => {
         const val = c.render ? c.render(row[c.key], row) : (row[c.key] || '—');
         return `<td>${val}</td>`;
       }).join('');
-      const btns = actions.map(a =>
-        `<button class="btn-action btn-${a.type}" data-id="${row[a.idKey || 'id']}" onclick="${a.fn}('${row[a.idKey || columns[0].key]}')">${a.label}</button>`
-      ).join(' ');
+      // Lê o ID directamente do objecto row (não das células renderizadas)
+      const btns = actions.map(a => {
+        const idKey = a.idKey || columns[0].key;
+        const idVal = String(row[idKey] || '').replace(/'/g, "\'");
+        return `<button class="btn-action btn-${a.type}" onclick="${a.fn}('${idVal}')">${a.label}</button>`;
+      }).join(' ');
       return `<tr>${cells}${actions.length ? `<td class="actions-cell">${btns}</td>` : ''}</tr>`;
     }).join('');
 
