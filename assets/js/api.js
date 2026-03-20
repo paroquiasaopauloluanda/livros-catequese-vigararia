@@ -9,7 +9,6 @@ const API = (() => {
 
   // ─── Verifica se o Spreadsheet ID está configurado ───────────────────────
   function _isConfigured() {
-    console.log("CONFIG.SPREADSHEET_ID",CONFIG.SPREADSHEET_ID);
     return CONFIG.SPREADSHEET_ID &&
            CONFIG.SPREADSHEET_ID !== '1eMk0WvkFbsj3knT3WnnGJNK1uyT1FyA-Y98Km7RPF3A' &&
            CONFIG.SPREADSHEET_ID.length > 10;
@@ -81,7 +80,8 @@ const API = (() => {
   }
 
   // ─── Fetch de uma sheet ───────────────────────────────────────────────────
-  async function fetchSheet(sheetName, forceRefresh = false) {
+  async function fetchSheet(sheetName, forceRefresh = false) 
+    console.log("CONFIG.SPREADSHEET_ID",CONFIG.SPREADSHEET_ID);{
     // Se não está configurado, usa dados de demo directamente
     if (!_isConfigured()) {
       console.info(`[API] Spreadsheet ID não configurado — a usar dados de demonstração para "${sheetName}"`);
