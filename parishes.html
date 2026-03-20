@@ -97,7 +97,6 @@ function renderTable() {
     { key: 'city',              label: 'Cidade' },
     { key: 'coordinator_name',  label: 'Coordenador' },
     { key: 'coordinator_phone', label: 'Telefone' },
-    { key: 'coordinator_email', label: 'Email' },
     { key: 'status',            label: 'Estado', render: v => Utils.statusBadge(v) },
     { key: 'parish_id',         label: 'Registos', render: v => {
       const n = recCount[v] || 0;
