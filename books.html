@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Livros — Catequese Vigararia</title>
+  <link rel="stylesheet" href="assets/css/main.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+  <div class="main-content">
+
+    <header class="page-header">
+      <div>
+        <div class="page-title">Base de Livros</div>
+        <div class="page-subtitle">Livros recomendados e em uso na vigararia</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary btn-sm" onclick="openCreateModal()">➕ Novo livro</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportExcel()">📥 Excel</button>
+      </div>
+    </header>
+
+    <main class="page-body">
+
+      <!-- Tabs: livros recomendados | livros em uso -->
+      <div class="tabs-nav">
+        <button class="tab-btn active" onclick="switchTab('recommended', this)">📖 Livros recomendados</button>
+        <button class="tab-btn" onclick="switchTab('inuse', this)">📊 Livros em uso</button>
+      </div>
+
+      <!-- Tab: Recomendados -->
+      <div class="tab-panel active" id="tab-recommended">
+        <div class="card">
+          <div id="booksTableContainer">
+            <div class="loading-overlay"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Em uso -->
+      <div class="tab-panel" id="tab-inuse">
+        <div class="card">
+          <div id="inUseTableContainer">
+            <div class="loading-overlay"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<div id="globalModal" class="modal-overlay"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/utils.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/layout.js"></script>
+<script>
+Layout.render('books');
+Auth.requireAuth(CONFIG.ROLES.ADMIN);
+
+let allBooks   = [];
+let allRecords = [];
+let stages     = [];
+let ageGroups  = [];
+
+async function load() {
+  [allBooks, allRecords, stages, ageGroups] = await Promise.all([
+    API.getBooks(),
+    API.getRecords(),
+    API.fetchSheet(CONFIG.SHEETS.STAGES),
+    API.fetchSheet(CONFIG.SHEETS.AGE_GROUPS),
+  ]);
+
+  renderRecommended();
+  renderInUse();
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+function renderRecommended() {
+  const columns = [
+    { key: 'book_id',           label: 'ID' },
+    { key: 'book_name',         label: 'Nome do Livro', render: v => `<strong>${v}</strong>` },
+    { key: 'author',            label: 'Autor' },
+    { key: 'publisher',         label: 'Editora' },
+    { key: 'year',              label: 'Ano' },
+    { key: 'recommended_stage', label: 'Etapa recomendada' },
+    { key: 'recommended_age',   label: 'Faixa etária' },
+  ];
+
+  Utils.buildTable('booksTableContainer', columns, allBooks, [
+    { label: '✏ Editar',   type: 'edit',   fn: 'editBook',   idKey: 'book_id' },
+    { label: '🗑 Eliminar', type: 'delete', fn: 'deleteBook', idKey: 'book_id' },
+  ]);
+}
+
+function renderInUse() {
+  // Conta quantas paróquias usam cada livro
+  const bookStats = {};
+  allRecords.forEach(r => {
+    if (!bookStats[r.book_name]) {
+      bookStats[r.book_name] = { book_name: r.book_name, author: r.author, publisher: r.publisher, count: 0, parishes: new Set(), stages: new Set() };
+    }
+    bookStats[r.book_name].count++;
+    bookStats[r.book_name].parishes.add(r.parish_id);
+    bookStats[r.book_name].stages.add(r.stage_id);
+  });
+
+  const stageMap = Object.fromEntries(stages.map(s => [s.stage_id, s.stage_name]));
+
+  const data = Object.values(bookStats)
+    .sort((a,b) => b.count - a.count)
+    .map(b => ({
+      ...b,
+      parish_count: b.parishes.size,
+      stage_list:   [...b.stages].map(id => stageMap[id] || id).join(', '),
+    }));
+
+  const columns = [
+    { key: 'book_name',    label: 'Livro',           render: v => `<strong>${v}</strong>` },
+    { key: 'author',       label: 'Autor' },
+    { key: 'publisher',    label: 'Editora' },
+    { key: 'count',        label: 'Nº de registos',  render: v => `<span class="badge badge-blue">${v}</span>` },
+    { key: 'parish_count', label: 'Paróquias',       render: v => `<span class="badge badge-purple">${v}</span>` },
+    { key: 'stage_list',   label: 'Etapas em uso',   render: v => `<small style="color:var(--text-3);">${Utils.truncate(v, 50)}</small>` },
+  ];
+
+  Utils.buildTable('inUseTableContainer', columns, data, []);
+}
+
+function bookForm(b = {}) {
+  const stageOpts = stages.map(s =>
+    `<option value="${s.stage_name}" ${b.recommended_stage===s.stage_name?'selected':''}>${s.stage_name}</option>`
+  ).join('');
+  const ageOpts = ageGroups.map(a =>
+    `<option value="${a.age_group}" ${b.recommended_age===a.age_group?'selected':''}>${a.age_group}</option>`
+  ).join('');
+
+  return `
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Nome do Livro <span class="req">*</span></label>
+        <input type="text" id="f_name" value="${b.book_name || ''}" placeholder="ex: Caminho da Fé">
+      </div>
+      <div class="form-group">
+        <label>Autor</label>
+        <input type="text" id="f_author" value="${b.author || ''}" placeholder="ex: CNBB">
+      </div>
+      <div class="form-group">
+        <label>Editora</label>
+        <input type="text" id="f_publisher" value="${b.publisher || ''}" placeholder="ex: Paulus">
+      </div>
+      <div class="form-group">
+        <label>Ano de edição</label>
+        <input type="number" id="f_year" value="${b.year || ''}" min="1900" max="2099">
+      </div>
+      <div class="form-group">
+        <label>Etapa recomendada</label>
+        <select id="f_stage">
+          <option value="">— Nenhuma —</option>
+          ${stageOpts}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Faixa etária recomendada</label>
+        <select id="f_age">
+          <option value="">— Todas —</option>
+          ${ageOpts}
+        </select>
+      </div>
+    </div>`;
+}
+
+function openCreateModal() {
+  Utils.showModal('Novo Livro', bookForm(),
+    `<button class="btn btn-primary" onclick="createBook()">➕ Adicionar</button>
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`
+  );
+}
+
+async function createBook() {
+  const name = document.getElementById('f_name').value.trim();
+  if (!name) { Toast.show('O nome do livro é obrigatório', 'error'); return; }
+
+  await API.createBook({
+    book_name:         name,
+    author:            document.getElementById('f_author').value.trim(),
+    publisher:         document.getElementById('f_publisher').value.trim(),
+    year:              document.getElementById('f_year').value,
+    recommended_stage: document.getElementById('f_stage').value,
+    recommended_age:   document.getElementById('f_age').value,
+  });
+
+  Utils.closeModal();
+  Toast.show('Livro adicionado!', 'success');
+  await load();
+}
+
+function editBook(book_id) {
+  const b = allBooks.find(b => b.book_id === book_id);
+  if (!b) return;
+  Utils.showModal('Editar Livro', bookForm(b),
+    `<button class="btn btn-primary" onclick="saveBook('${book_id}')">💾 Guardar</button>
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`
+  );
+}
+
+async function saveBook(book_id) {
+  const name = document.getElementById('f_name').value.trim();
+  if (!name) { Toast.show('O nome é obrigatório', 'error'); return; }
+
+  const result = await API.updateBook(book_id, {
+    book_name:         name,
+    author:            document.getElementById('f_author').value.trim(),
+    publisher:         document.getElementById('f_publisher').value.trim(),
+    year:              document.getElementById('f_year').value,
+    recommended_stage: document.getElementById('f_stage').value,
+    recommended_age:   document.getElementById('f_age').value,
+  });
+
+  if (result.success) {
+    Utils.closeModal();
+    Toast.show('Livro actualizado!', 'success');
+    await load();
+  } else {
+    Toast.show('Não foi possível editar (livro remoto)', 'warning');
+  }
+}
+
+function deleteBook(book_id) {
+  const b = allBooks.find(b => b.book_id === book_id);
+  Utils.confirmAction(`Eliminar o livro "${b?.book_name}"?`, async () => {
+    await API.deleteBook(book_id);
+    Toast.show('Livro eliminado!', 'success');
+    await load();
+  });
+}
+
+function exportExcel() {
+  Utils.exportToExcel(allBooks.map(b => ({
+    'ID':                  b.book_id,
+    'Nome':                b.book_name,
+    'Autor':               b.author,
+    'Editora':             b.publisher,
+    'Ano':                 b.year,
+    'Etapa recomendada':   b.recommended_stage,
+    'Faixa etária':        b.recommended_age,
+  })), 'livros_vigararia', 'Livros');
+}
+
+load();
+</script>
+</body>
+</html>

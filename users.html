@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Utilizadores — Catequese Vigararia</title>
+  <link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body>
+<div class="app-layout">
+  <div class="main-content">
+
+    <header class="page-header">
+      <div>
+        <div class="page-title">Utilizadores</div>
+        <div class="page-subtitle">Gestão de acessos ao sistema</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary btn-sm" onclick="openCreateModal()">➕ Novo utilizador</button>
+      </div>
+    </header>
+
+    <main class="page-body">
+
+      <div class="alert alert-warning">
+        ⚠ <strong>Nota de segurança:</strong> Este sistema usa autenticação básica via Google Sheets.
+        As senhas são armazenadas em texto simples na planilha. Para produção, recomenda-se Firebase Authentication.
+      </div>
+
+      <div class="card">
+        <div id="usersTableContainer">
+          <div class="loading-overlay"><div class="spinner"></div> A carregar…</div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<div id="globalModal" class="modal-overlay"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/utils.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/layout.js"></script>
+<script>
+Layout.render('users');
+Auth.requireAuth(CONFIG.ROLES.ADMIN);
+
+let allUsers    = [];
+let allParishes = [];
+
+async function load() {
+  [allUsers, allParishes] = await Promise.all([
+    API.getUsers(),
+    API.getParishes(),
+  ]);
+  renderTable();
+}
+
+function getParishName(parish_id) {
+  if (parish_id === 'ALL') return '— Todas (admin) —';
+  const p = allParishes.find(p => p.parish_id === parish_id);
+  return p ? p.parish_name : parish_id;
+}
+
+function renderTable() {
+  const columns = [
+    { key: 'user_id',      label: 'ID' },
+    { key: 'username',     label: 'Utilizador', render: v => `<strong>${v}</strong>` },
+    { key: 'display_name', label: 'Nome de exibição' },
+    { key: 'role',         label: 'Perfil',   render: v => Utils.statusBadge(v) },
+    { key: 'parish_id',    label: 'Paróquia', render: v => getParishName(v) },
+    { key: 'password',     label: 'Senha',    render: () => '<span style="color:var(--text-3);">••••••</span>' },
+    { key: 'status',       label: 'Estado',   render: v => Utils.statusBadge(v) },
+  ];
+
+  Utils.buildTable('usersTableContainer', columns, allUsers, [
+    { label: '✏ Editar',    type: 'edit',   fn: 'editUser',   idKey: 'user_id' },
+    { label: '🔑 Senha',     type: 'view',  fn: 'resetPass',  idKey: 'user_id' },
+    { label: '🗑 Eliminar',  type: 'delete', fn: 'deleteUser', idKey: 'user_id' },
+  ]);
+}
+
+function userForm(u = {}, isCreate = true) {
+  const parishOpts = allParishes
+    .map(p => `<option value="${p.parish_id}" ${u.parish_id===p.parish_id?'selected':''}>${p.parish_name}</option>`)
+    .join('');
+
+  return `
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Nome de utilizador <span class="req">*</span></label>
+        <input type="text" id="f_username" value="${u.username || ''}" placeholder="ex: sjose" ${!isCreate ? 'readonly style="background:var(--surface-2)"' : ''}>
+        <div class="form-help">Sem espaços nem caracteres especiais</div>
+      </div>
+      <div class="form-group">
+        <label>Nome de exibição</label>
+        <input type="text" id="f_dispname" value="${u.display_name || ''}" placeholder="ex: Coord. São José">
+      </div>
+      <div class="form-group">
+        <label>Perfil <span class="req">*</span></label>
+        <select id="f_role" onchange="toggleParishField()">
+          <option value="parish" ${(u.role||'parish')==='parish'?'selected':''}>Paróquia</option>
+          <option value="admin"  ${u.role==='admin'?'selected':''}>Administrador</option>
+        </select>
+      </div>
+      <div class="form-group" id="parishField">
+        <label>Paróquia <span class="req">*</span></label>
+        <select id="f_parish">
+          <option value="">— Seleccionar —</option>
+          ${parishOpts}
+        </select>
+      </div>
+      ${isCreate ? `
+      <div class="form-group">
+        <label>Senha <span class="req">*</span></label>
+        <input type="password" id="f_pass" placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="form-group">
+        <label>Confirmar senha <span class="req">*</span></label>
+        <input type="password" id="f_pass2" placeholder="Repete a senha">
+      </div>` : ''}
+      <div class="form-group">
+        <label>Estado</label>
+        <select id="f_status">
+          <option value="active"   ${(u.status||'active')==='active'?'selected':''}>Activo</option>
+          <option value="inactive" ${u.status==='inactive'?'selected':''}>Inactivo</option>
+        </select>
+      </div>
+    </div>`;
+}
+
+function toggleParishField() {
+  const role = document.getElementById('f_role').value;
+  const pf   = document.getElementById('parishField');
+  if (pf) pf.style.display = role === 'admin' ? 'none' : '';
+}
+
+function openCreateModal() {
+  Utils.showModal('Novo Utilizador', userForm({}, true),
+    `<button class="btn btn-primary" onclick="createUser()">➕ Criar utilizador</button>
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`
+  );
+  toggleParishField();
+}
+
+async function createUser() {
+  const username = document.getElementById('f_username').value.trim();
+  const role     = document.getElementById('f_role').value;
+  const parish   = document.getElementById('f_parish')?.value || 'ALL';
+  const pass     = document.getElementById('f_pass').value;
+  const pass2    = document.getElementById('f_pass2').value;
+
+  if (!username)           { Toast.show('O utilizador é obrigatório', 'error'); return; }
+  if (!/^[\w_-]+$/.test(username)) { Toast.show('O utilizador não pode ter espaços nem acentos', 'error'); return; }
+  if (pass.length < 6)     { Toast.show('A senha deve ter pelo menos 6 caracteres', 'error'); return; }
+  if (pass !== pass2)      { Toast.show('As senhas não coincidem', 'error'); return; }
+  if (role === 'parish' && !parish) { Toast.show('Selecciona a paróquia', 'error'); return; }
+
+  const existing = allUsers.find(u => u.username === username);
+  if (existing)            { Toast.show('Este utilizador já existe', 'error'); return; }
+
+  await API.createUser({
+    username,
+    password:     pass,
+    role,
+    parish_id:    role === 'admin' ? 'ALL' : parish,
+    display_name: document.getElementById('f_dispname').value.trim() || username,
+    status:       document.getElementById('f_status').value,
+  });
+
+  Utils.closeModal();
+  Toast.show('Utilizador criado!', 'success');
+  await load();
+}
+
+function editUser(user_id) {
+  const u = allUsers.find(u => u.user_id === user_id);
+  if (!u) return;
+  Utils.showModal('Editar Utilizador', userForm(u, false),
+    `<button class="btn btn-primary" onclick="saveUser('${user_id}')">💾 Guardar</button>
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`
+  );
+  setTimeout(toggleParishField, 50);
+}
+
+async function saveUser(user_id) {
+  const role   = document.getElementById('f_role').value;
+  const parish = document.getElementById('f_parish')?.value || 'ALL';
+
+  const result = await API.updateUser(user_id, {
+    display_name: document.getElementById('f_dispname').value.trim(),
+    role,
+    parish_id:    role === 'admin' ? 'ALL' : parish,
+    status:       document.getElementById('f_status').value,
+  });
+
+  if (result.success) {
+    Utils.closeModal();
+    Toast.show('Utilizador actualizado!', 'success');
+    await load();
+  } else {
+    Toast.show('Não foi possível editar este utilizador', 'warning');
+  }
+}
+
+function resetPass(user_id) {
+  Utils.showModal('Redefinir Senha', `
+    <div class="form-group">
+      <label>Nova senha <span class="req">*</span></label>
+      <input type="password" id="new_pass" placeholder="Mínimo 6 caracteres">
+    </div>
+    <div class="form-group" style="margin-top:12px;">
+      <label>Confirmar nova senha <span class="req">*</span></label>
+      <input type="password" id="new_pass2">
+    </div>`,
+    `<button class="btn btn-warning" onclick="doResetPass('${user_id}')">🔑 Redefinir</button>
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`
+  );
+}
+
+async function doResetPass(user_id) {
+  const pass  = document.getElementById('new_pass').value;
+  const pass2 = document.getElementById('new_pass2').value;
+  if (pass.length < 6) { Toast.show('Mínimo 6 caracteres', 'error'); return; }
+  if (pass !== pass2)  { Toast.show('As senhas não coincidem', 'error'); return; }
+
+  const result = await API.updateUser(user_id, { password: pass });
+  if (result.success) {
+    Utils.closeModal();
+    Toast.show('Senha redefinida!', 'success');
+  } else {
+    Toast.show('Não foi possível redefinir a senha neste utilizador (remoto)', 'warning');
+  }
+}
+
+function deleteUser(user_id) {
+  const currentUser = Auth.getCurrentUser();
+  if (currentUser.user_id === user_id) { Toast.show('Não podes eliminar a tua própria conta!', 'error'); return; }
+  Utils.confirmAction('Eliminar este utilizador definitivamente?', async () => {
+    await API.deleteUser(user_id);
+    Toast.show('Utilizador eliminado!', 'success');
+    await load();
+  });
+}
+
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paróquias — Catequese Vigararia</title>
+  <link rel="stylesheet" href="assets/css/main.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+  <div class="main-content">
+
+    <header class="page-header">
+      <div>
+        <div class="page-title">Paróquias</div>
+        <div class="page-subtitle">Gestão das paróquias da vigararia</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary btn-sm" onclick="openCreateModal()">➕ Nova paróquia</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportExcel()">📥 Excel</button>
+      </div>
+    </header>
+
+    <main class="page-body">
+
+      <!-- KPIs rápidos -->
+      <div class="kpi-grid" id="kpiParishes" style="margin-bottom:20px;"></div>
+
+      <div class="card">
+        <div id="parishTableContainer">
+          <div class="loading-overlay"><div class="spinner"></div> A carregar…</div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<div id="globalModal" class="modal-overlay"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/utils.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/layout.js"></script>
+<script>
+Layout.render('parishes');
+Auth.requireAuth(CONFIG.ROLES.ADMIN);
+
+let allParishes = [];
+let allRecords  = [];
+
+async function load() {
+  [allParishes, allRecords] = await Promise.all([
+    API.getParishes(),
+    API.getRecords(),
+  ]);
+
+  // KPIs
+  const active   = allParishes.filter(p => p.status === 'active').length;
+  const inactive = allParishes.filter(p => p.status !== 'active').length;
+  const withRec  = new Set(allRecords.map(r => r.parish_id)).size;
+
+  document.getElementById('kpiParishes').innerHTML = `
+    <div class="kpi-card kpi-card-accent">
+      <div class="kpi-icon">⛪</div>
+      <div class="kpi-value">${allParishes.length}</div>
+      <div class="kpi-label">Total de paróquias</div>
+    </div>
+    <div class="kpi-card kpi-card-accent accent-green">
+      <div class="kpi-icon">✓</div>
+      <div class="kpi-value">${active}</div>
+      <div class="kpi-label">Activas</div>
+    </div>
+    <div class="kpi-card kpi-card-accent accent-warn">
+      <div class="kpi-icon">📋</div>
+      <div class="kpi-value">${withRec}</div>
+      <div class="kpi-label">Com registos</div>
+    </div>
+    <div class="kpi-card kpi-card-accent">
+      <div class="kpi-icon">⚠</div>
+      <div class="kpi-value">${allParishes.length - withRec}</div>
+      <div class="kpi-label">Sem registos</div>
+    </div>`;
+
+  renderTable();
+}
+
+function renderTable() {
+  const recCount = {};
+  allRecords.forEach(r => { recCount[r.parish_id] = (recCount[r.parish_id] || 0) + 1; });
+
+  const columns = [
+    { key: 'parish_id',         label: 'ID' },
+    { key: 'parish_name',       label: 'Nome da Paróquia', render: v => `<strong>${v}</strong>` },
+    { key: 'city',              label: 'Cidade' },
+    { key: 'coordinator_name',  label: 'Coordenador' },
+    { key: 'coordinator_phone', label: 'Telefone' },
+    { key: 'coordinator_email', label: 'Email' },
+    { key: 'status',            label: 'Estado', render: v => Utils.statusBadge(v) },
+    { key: 'parish_id',         label: 'Registos', render: v => {
+      const n = recCount[v] || 0;
+      return `<span class="badge ${n > 0 ? 'badge-blue' : 'badge-gray'}">${n}</span>`;
+    }},
+  ];
+
+  Utils.buildTable('parishTableContainer', columns, allParishes, [
+    { label: '✏ Editar',   type: 'edit',   fn: 'editParish',   idKey: 'parish_id' },
+    { label: '🗑 Eliminar', type: 'delete', fn: 'deleteParish', idKey: 'parish_id' },
+  ]);
+}
+
+function parishForm(p = {}) {
+  return `
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Nome da Paróquia <span class="req">*</span></label>
+        <input type="text" id="f_name" value="${p.parish_name || ''}" placeholder="ex: Paróquia São José">
+      </div>
+      <div class="form-group">
+        <label>Cidade / Localidade</label>
+        <input type="text" id="f_city" value="${p.city || ''}" placeholder="ex: Luanda">
+      </div>
+      <div class="form-group">
+        <label>Estado</label>
+        <select id="f_status">
+          <option value="active"   ${(p.status||'active')==='active'?'selected':''}>Activa</option>
+          <option value="inactive" ${p.status==='inactive'?'selected':''}>Inactiva</option>
+        </select>
+      </div>
+      <div class="divider" style="grid-column:1/-1;margin:4px 0;"></div>
+      <div class="form-group full" style="grid-column:1/-1;">
+        <label style="margin-bottom:8px;display:block;">Coordenador da Catequese</label>
+      </div>
+      <div class="form-group full">
+        <label>Nome do Coordenador</label>
+        <input type="text" id="f_coord_name" value="${p.coordinator_name || ''}" placeholder="ex: João Manuel">
+      </div>
+      <div class="form-group">
+        <label>Telefone</label>
+        <input type="text" id="f_coord_phone" value="${p.coordinator_phone || ''}" placeholder="ex: 923000000">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="f_coord_email" value="${p.coordinator_email || ''}" placeholder="ex: joao@email.com">
+      </div>
+    </div>`;
+}
+
+function openCreateModal() {
+  Utils.showModal('Nova Paróquia', parishForm(),
+    `<button class="btn btn-primary" onclick="createParish()">➕ Criar paróquia</button>
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`
+  );
+}
+
+async function createParish() {
+  const name = document.getElementById('f_name').value.trim();
+  if (!name) { Toast.show('O nome é obrigatório', 'error'); return; }
+
+  const result = await API.createParish({
+    parish_name:       name,
+    city:              document.getElementById('f_city').value.trim(),
+    status:            document.getElementById('f_status').value,
+    coordinator_name:  document.getElementById('f_coord_name').value.trim(),
+    coordinator_phone: document.getElementById('f_coord_phone').value.trim(),
+    coordinator_email: document.getElementById('f_coord_email').value.trim(),
+  });
+
+  if (result.success) {
+    Utils.closeModal();
+    Toast.show('Paróquia criada!', 'success');
+    await load();
+  }
+}
+
+function editParish(parish_id) {
+  const p = allParishes.find(p => p.parish_id === parish_id);
+  if (!p) return;
+  Utils.showModal('Editar Paróquia', parishForm(p),
+    `<button class="btn btn-primary" onclick="saveParish('${parish_id}')">💾 Guardar</button>
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`
+  );
+}
+
+async function saveParish(parish_id) {
+  const name = document.getElementById('f_name').value.trim();
+  if (!name) { Toast.show('O nome é obrigatório', 'error'); return; }
+
+  const result = await API.updateParish(parish_id, {
+    parish_name:       name,
+    city:              document.getElementById('f_city').value.trim(),
+    status:            document.getElementById('f_status').value,
+    coordinator_name:  document.getElementById('f_coord_name').value.trim(),
+    coordinator_phone: document.getElementById('f_coord_phone').value.trim(),
+    coordinator_email: document.getElementById('f_coord_email').value.trim(),
+  });
+
+  if (result.success) {
+    Utils.closeModal();
+    Toast.show('Paróquia actualizada!', 'success');
+    await load();
+  } else {
+    Toast.show(result.error || 'Não foi possível editar (registo remoto)', 'warning');
+  }
+}
+
+function deleteParish(parish_id) {
+  const p = allParishes.find(p => p.parish_id === parish_id);
+  Utils.confirmAction(`Eliminar a paróquia "${p?.parish_name}"? Esta acção não pode ser desfeita.`, async () => {
+    await API.deleteParish(parish_id);
+    Toast.show('Paróquia eliminada!', 'success');
+    await load();
+  });
+}
+
+function exportExcel() {
+  Utils.exportToExcel(allParishes.map(p => ({
+    'ID':           p.parish_id,
+    'Nome':         p.parish_name,
+    'Cidade':       p.city,
+    'Coordenador':  p.coordinator_name,
+    'Telefone':     p.coordinator_phone,
+    'Email':        p.coordinator_email,
+    'Estado':       p.status,
+  })), 'paroquias_vigararia', 'Paróquias');
+}
+
+load();
+</script>
+</body>
+</html>

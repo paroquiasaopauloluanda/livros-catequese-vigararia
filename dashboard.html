@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Catequese Vigararia</title>
+  <link rel="stylesheet" href="assets/css/main.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+  <div class="main-content">
+
+    <header class="page-header">
+      <div>
+        <div class="page-title">Dashboard</div>
+        <div class="page-subtitle" id="headerSubtitle">Visão geral da vigararia</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" onclick="refreshData()">↺ Actualizar</button>
+        <button class="btn btn-secondary btn-sm" onclick="Utils.printPage()">🖨 Imprimir</button>
+      </div>
+    </header>
+
+    <main class="page-body">
+
+      <!-- KPIs -->
+      <div class="kpi-grid" id="kpiGrid">
+        <div class="loading-overlay"><div class="spinner"></div> A carregar…</div>
+      </div>
+
+      <!-- Barra de uniformização -->
+      <div class="card" style="margin-bottom:20px;" id="uniformCard">
+        <div class="card-header">
+          <div class="card-title">Taxa de Uniformização</div>
+          <span id="uniformBadge" class="badge badge-gray">—</span>
+        </div>
+        <div class="card-body">
+          <p style="font-size:13.5px;color:var(--text-3);margin-bottom:10px;">
+            Percentagem de etapas da catequese onde todas as paróquias com registos utilizam o <em>mesmo</em> livro.
+          </p>
+          <div class="uniformity-bar-wrap">
+            <div class="uniformity-bar-fill" id="uniformBar" style="width:0%"></div>
+          </div>
+          <div id="uniformDetail" style="margin-top:10px;font-size:13px;color:var(--text-3);"></div>
+        </div>
+      </div>
+
+      <!-- Gráficos linha 1 -->
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Livros mais utilizados</div></div>
+          <div class="card-body">
+            <div class="chart-container" style="height:260px;">
+              <canvas id="chartTopBooks"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Registos por Paróquia</div></div>
+          <div class="card-body">
+            <div class="chart-container" style="height:260px;">
+              <canvas id="chartByParish"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gráficos linha 2 -->
+      <div class="card-grid" style="margin-top:20px;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Registos por Etapa</div></div>
+          <div class="card-body">
+            <div class="chart-container" style="height:260px;">
+              <canvas id="chartByStage"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Comparação de Livros por Etapa</div>
+          </div>
+          <div class="card-body">
+            <div id="comparisonTable">
+              <div class="loading-overlay"><div class="spinner"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/utils.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/layout.js"></script>
+<script>
+Layout.render('dashboard');
+
+const CHART_COLORS = [
+  '#1a4a6b','#2563a0','#c0862a','#2d7a4f','#5c3d8a',
+  '#b83232','#0891b2','#854d0e','#065f46','#6d28d9'
+];
+
+let charts = {};
+
+async function loadDashboard() {
+  try {
+    const [records, parishes, stages, ageGroups] = await Promise.all([
+      API.getRecords(),
+      API.getParishes(),
+      API.fetchSheet(CONFIG.SHEETS.STAGES),
+      API.fetchSheet(CONFIG.SHEETS.AGE_GROUPS),
+    ]);
+
+    const stats = Utils.computeStats(records, parishes, stages);
+
+    // Mapas para nomes
+    const parishMap = Object.fromEntries(parishes.map(p => [p.parish_id, p.parish_name]));
+    const stageMap  = Object.fromEntries(stages.map(s => [s.stage_id, s.stage_name]));
+
+    // ─── KPIs ─────────────────────────────────────────────────────────────
+    document.getElementById('kpiGrid').innerHTML = `
+      <div class="kpi-card kpi-card-accent">
+        <div class="kpi-icon">📋</div>
+        <div class="kpi-value">${records.length}</div>
+        <div class="kpi-label">Total de registos</div>
+      </div>
+      <div class="kpi-card kpi-card-accent accent-gold">
+        <div class="kpi-icon">⛪</div>
+        <div class="kpi-value">${stats.activeParishes}</div>
+        <div class="kpi-label">Paróquias com registos</div>
+      </div>
+      <div class="kpi-card kpi-card-accent accent-green">
+        <div class="kpi-icon">📚</div>
+        <div class="kpi-value">${stats.topBooks.length}</div>
+        <div class="kpi-label">Livros distintos em uso</div>
+      </div>
+      <div class="kpi-card kpi-card-accent accent-warn">
+        <div class="kpi-icon">📐</div>
+        <div class="kpi-value">${Object.keys(stats.byStage).length}</div>
+        <div class="kpi-label">Etapas com registos</div>
+      </div>
+    `;
+
+    // ─── Uniformização ────────────────────────────────────────────────────
+    const uniformRate = stats.uniformRate;
+    document.getElementById('uniformBar').style.width = uniformRate + '%';
+    document.getElementById('uniformBadge').textContent = uniformRate + '%';
+    document.getElementById('uniformBadge').className =
+      uniformRate >= 70 ? 'badge badge-green' :
+      uniformRate >= 40 ? 'badge badge-amber' : 'badge badge-red';
+
+    const uniformStages = Object.entries(stats.stageBooks)
+      .filter(([,books]) => books.size === 1).length;
+    const totalS = Object.keys(stats.stageBooks).length;
+    document.getElementById('uniformDetail').textContent =
+      `${uniformStages} de ${totalS} etapas com registos estão uniformizadas.`;
+
+    // ─── Gráfico: Livros mais usados ──────────────────────────────────────
+    destroyChart('chartTopBooks');
+    charts.topBooks = new Chart(document.getElementById('chartTopBooks'), {
+      type: 'bar',
+      data: {
+        labels: stats.topBooks.map(b => b.name.length > 22 ? b.name.slice(0,22)+'…' : b.name),
+        datasets: [{ data: stats.topBooks.map(b => b.count), backgroundColor: CHART_COLORS, borderRadius: 6, borderSkipped: false }]
+      },
+      options: chartOptions('horizontal')
+    });
+
+    // ─── Gráfico: Por paróquia ────────────────────────────────────────────
+    const parishLabels = Object.keys(stats.byParish).map(id => parishMap[id] || id);
+    const parishData   = Object.values(stats.byParish);
+    destroyChart('chartByParish');
+    charts.byParish = new Chart(document.getElementById('chartByParish'), {
+      type: 'doughnut',
+      data: {
+        labels: parishLabels,
+        datasets: [{ data: parishData, backgroundColor: CHART_COLORS, borderWidth: 2, borderColor: '#fff' }]
+      },
+      options: { ...chartOptions('doughnut'), cutout: '60%' }
+    });
+
+    // ─── Gráfico: Por etapa ───────────────────────────────────────────────
+    const stageLabels = Object.keys(stats.byStage).map(id => stageMap[id] || id);
+    const stageData   = Object.values(stats.byStage);
+    destroyChart('chartByStage');
+    charts.byStage = new Chart(document.getElementById('chartByStage'), {
+      type: 'bar',
+      data: {
+        labels: stageLabels,
+        datasets: [{ label: 'Registos', data: stageData, backgroundColor: '#1a4a6b', borderRadius: 6, borderSkipped: false }]
+      },
+      options: chartOptions('vertical')
+    });
+
+    // ─── Tabela de comparação por etapa ──────────────────────────────────
+    const comparisonRows = Object.entries(stats.stageBooks).map(([stageId, books]) => {
+      const stageName = stageMap[stageId] || stageId;
+      const bookList  = [...books].join(', ');
+      const uniform   = books.size === 1;
+      return `<tr>
+        <td><strong>${stageName}</strong></td>
+        <td>${books.size}</td>
+        <td style="max-width:200px;font-size:12px;">${bookList}</td>
+        <td>${uniform ? '<span class="badge badge-green">✓ Uniforme</span>' : '<span class="badge badge-red">✗ Divergente</span>'}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('comparisonTable').innerHTML = `
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead><tr><th>Etapa</th><th>Livros distintos</th><th>Livros em uso</th><th>Estado</th></tr></thead>
+          <tbody>${comparisonRows || '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-3)">Sem dados</td></tr>'}</tbody>
+        </table>
+      </div>`;
+
+  } catch (err) {
+    console.error('[Dashboard]', err);
+    Toast.show('Erro ao carregar o dashboard', 'error');
+  }
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function chartOptions(type) {
+  const base = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: type === 'doughnut', position: 'bottom', labels: { boxWidth: 12, padding: 14, font: { size: 12, family: "'DM Sans', sans-serif" } } },
+    }
+  };
+  if (type === 'horizontal') {
+    return { ...base, indexAxis: 'y', scales: { x: { beginAtZero: true, grid: { color: '#f0ede8' } }, y: { grid: { display: false }, ticks: { font: { size: 12 } } } } };
+  }
+  if (type === 'vertical') {
+    return { ...base, scales: { y: { beginAtZero: true, grid: { color: '#f0ede8' } }, x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 35 } } } };
+  }
+  return base;
+}
+
+async function refreshData() {
+  API.clearCache();
+  await loadDashboard();
+  Toast.show('Dados actualizados!', 'success');
+}
+
+loadDashboard();
+</script>
+</body>
+</html>
