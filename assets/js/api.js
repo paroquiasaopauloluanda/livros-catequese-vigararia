@@ -1,62 +1,121 @@
 /**
  * api.js — Integração com Google Sheets
  * Lê dados via endpoint gviz/tq (leitura pública)
- * Escrita simulada via localStorage (para demo) ou Apps Script
+ * Escrita via localStorage (CRUD local persistente)
  */
 const API = (() => {
   const CACHE = {};
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
+  // ─── Verifica se o Spreadsheet ID está configurado ───────────────────────
+  function _isConfigured() {
+    return CONFIG.SPREADSHEET_ID &&
+           CONFIG.SPREADSHEET_ID !== 'COLE_O_ID_DA_TUA_PLANILHA_AQUI' &&
+           CONFIG.SPREADSHEET_ID.length > 10;
+  }
+
   // ─── Parser do formato gviz/tq ───────────────────────────────────────────
+  // O gviz/tq envolve a resposta em: google.visualization.Query.setResponse({...})
+  //
+  // PROBLEMA COMUM: quando o Google Sheets não reconhece a primeira linha como
+  // cabeçalhos, as colunas ficam com label "A", "B", "C"... em vez dos nomes reais.
+  // SOLUÇÃO: se os labels forem letras simples (A-Z), significa que o gviz não leu
+  // os cabeçalhos — nesse caso usamos a PRIMEIRA LINHA dos dados como cabeçalhos.
   function _parseGvizResponse(raw) {
-    // Remove o wrapper JS: google.visualization.Query.setResponse({...})
-    const json = raw.replace(/^[^(]+\(/, '').replace(/\);?\s*$/, '');
-    const data = JSON.parse(json);
+    // Remove o wrapper JSONP de forma robusta
+    const json = raw
+      .replace(/^\s*\/\*[^*]*\*+(?:[^/*][^*]*\*+)*\/\s*/, '')
+      .replace(/^[^(]*\(/, '')
+      .replace(/\);\s*$/, '')
+      .trim();
 
-    if (!data.table || !data.table.rows) return [];
+    let data;
+    try {
+      data = JSON.parse(json);
+    } catch (e) {
+      console.error('[API] Falha ao fazer parse do gviz JSON:', e, '\nRaw (primeiros 300):', raw.slice(0, 300));
+      return [];
+    }
 
-    const cols = data.table.cols.map(c => c.label || c.id);
+    if (!data.table) { console.warn('[API] Resposta sem tabela:', data); return []; }
+    if (!data.table.rows || data.table.rows.length === 0) { return []; }
 
-    return data.table.rows
-      .filter(row => row.c && row.c.some(cell => cell && cell.v !== null))
-      .map(row => {
-        const obj = {};
-        cols.forEach((col, i) => {
-          const cell = row.c && row.c[i];
-          obj[col] = cell ? (cell.v !== null ? cell.v : '') : '';
-        });
-        return obj;
+    // ── Detecta se os labels são apenas letras de coluna (A, B, C...)
+    // Isso indica que o gviz não reconheceu os cabeçalhos da sheet
+    const rawCols = data.table.cols.map(c => (c.label && c.label.trim()) ? c.label.trim() : (c.id || ''));
+    const looksLikeLetters = rawCols.every(l => /^[A-Z]{1,3}$/.test(l));
+
+    let cols;
+    let rows = data.table.rows.filter(row => row && row.c && row.c.some(cell => cell && cell.v !== null && cell.v !== ''));
+
+    if (looksLikeLetters && rows.length > 0) {
+      // A primeira linha de dados contém os cabeçalhos reais
+      const headerRow = rows[0];
+      cols = headerRow.c.map(cell => (cell && cell.v) ? String(cell.v).trim() : '');
+      rows = rows.slice(1); // resto são os dados
+      console.log('[API] Cabeçalhos lidos da primeira linha de dados:', cols);
+    } else {
+      cols = rawCols;
+      console.log('[API] Cabeçalhos lidos dos metadados do gviz:', cols);
+    }
+
+    const result = rows.map(row => {
+      const obj = {};
+      cols.forEach((col, i) => {
+        if (!col) return; // ignora colunas sem nome
+        const cell = row.c && row.c[i];
+        let val = '';
+        if (cell && cell.v !== null && cell.v !== undefined) {
+          val = (cell.f !== null && cell.f !== undefined) ? cell.f : cell.v;
+          if (typeof val === 'number') val = String(val);
+          if (typeof val === 'boolean') val = val ? 'true' : 'false';
+        }
+        obj[col] = val;
       });
+      return obj;
+    });
+
+    console.log(`[API] ${result.length} linhas parseadas. Exemplo:`, result[0] || '(vazio)');
+    return result;
   }
 
   // ─── Fetch de uma sheet ───────────────────────────────────────────────────
   async function fetchSheet(sheetName, forceRefresh = false) {
+    // Se não está configurado, usa dados de demo directamente
+    if (!_isConfigured()) {
+      console.info(`[API] Spreadsheet ID não configurado — a usar dados de demonstração para "${sheetName}"`);
+      return _getDemoData(sheetName);
+    }
+
     const cacheKey = `sheet_${sheetName}`;
     const now = Date.now();
 
-    // Verifica cache em memória
+    // Cache em memória
     if (!forceRefresh && CACHE[cacheKey] && (now - CACHE[cacheKey].ts) < CACHE_TTL) {
       return CACHE[cacheKey].data;
     }
 
-    // Verifica localStorage cache
+    // Cache em localStorage
     if (!forceRefresh) {
-      const lsKey = `cvs_cache_${sheetName}`;
-      const lsCached = localStorage.getItem(lsKey);
+      const lsCached = localStorage.getItem(`cvs_cache_${sheetName}`);
       if (lsCached) {
-        const { ts, data } = JSON.parse(lsCached);
-        if ((now - ts) < CACHE_TTL) {
-          CACHE[cacheKey] = { ts, data };
-          return data;
-        }
+        try {
+          const { ts, data } = JSON.parse(lsCached);
+          if ((now - ts) < CACHE_TTL) {
+            CACHE[cacheKey] = { ts, data };
+            return data;
+          }
+        } catch (e) { /* cache corrompido, ignora */ }
       }
     }
 
+    // Tenta o endpoint gviz/tq
     const url = `${CONFIG.SHEETS_BASE}${encodeURIComponent(sheetName)}`;
+    console.log(`[API] A buscar sheet "${sheetName}" em:`, url);
 
     try {
       const resp = await fetch(url);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
       const text = await resp.text();
       const data = _parseGvizResponse(text);
 
