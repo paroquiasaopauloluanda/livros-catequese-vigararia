@@ -1,19 +1,19 @@
 /**
  * config.js — Configuração central do sistema
- * Editar este ficheiro para apontar para o Google Sheets correcto
  */
 const CONFIG = {
   // ─── Google Sheets ───────────────────────────────────────────────────────
-  // Substitui pelo ID da tua planilha (encontra-se no URL do Google Sheets)
-  // SPREADSHEET_ID: 'COLE_O_ID_DA_TUA_PLANILHA_AQUI',
   SPREADSHEET_ID: '1eMk0WvkFbsj3knT3WnnGJNK1uyT1FyA-Y98Km7RPF3A',
 
-  // URL base para leitura via CSV público
+  // URL do Google Apps Script Web App (para escrita na planilha)
+  // Depois de fazer deploy do Apps Script, cola o URL aqui
+  // APPS_SCRIPT_URL: 'COLE_O_URL_DO_APPS_SCRIPT_AQUI',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxPtIyG-whMGCfAatkTrrt1qPFW9fnFCqf8h9HMOb-O_7FcnODc-huwE_V0iDlTKJQ_/exec',
+
   get SHEETS_BASE() {
     return `https://docs.google.com/spreadsheets/d/${this.SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=`;
   },
 
-  // Nomes exactos das sheets na planilha
   SHEETS: {
     PARISHES:   'Parishes',
     USERS:      'Users',
@@ -23,29 +23,16 @@ const CONFIG = {
     RECORDS:    'CatechesisRecords',
   },
 
-  // ─── Aplicação ───────────────────────────────────────────────────────────
-  APP_NAME:    'Catequese Vigararia',
-  APP_VERSION: '1.0.0',
-  LOCALE:      'pt-AO',
-
-  // Sessão (minutos)
+  APP_NAME:        'Catequese Vigararia',
+  APP_VERSION:     '1.0.0',
+  LOCALE:          'pt-AO',
   SESSION_TIMEOUT: 480,
 
-  // Roles
-  ROLES: {
-    ADMIN:  'admin',
-    PARISH: 'parish',
-  },
-
-  // Status dos registos
-  STATUS: {
-    DRAFT:     'draft',
-    SUBMITTED: 'submitted',
-    CONFIRMED: 'confirmed',
-  },
+  ROLES:  { ADMIN: 'admin', PARISH: 'parish' },
+  STATUS: { DRAFT: 'draft', SUBMITTED: 'submitted', CONFIRMED: 'confirmed' },
 };
 
-// Congela o objecto para evitar mutações acidentais
 Object.freeze(CONFIG);
 Object.freeze(CONFIG.SHEETS);
 Object.freeze(CONFIG.ROLES);
+Object.freeze(CONFIG.STATUS);
