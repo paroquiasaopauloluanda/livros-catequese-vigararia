@@ -102,28 +102,30 @@ const API = (() => {
   }
 
   // ─── Apps Script (escrita) ────────────────────────────────────────────────
+  // CORS fix: Apps Script redireciona POSTs, o browser bloqueia.
+  // Usamos GET com payload na URL + mode:no-cors (sem preflight, sem redirecionamento bloqueado).
+  // Não conseguimos ler a resposta (opaque), por isso assumimos sucesso e relemos a sheet.
   async function _post(action, data) {
     if (!_scriptConfigured()) {
       console.warn('[API] Apps Script não configurado — a usar localStorage');
-      return null; // sinaliza fallback para localStorage
+      return null;
     }
 
     try {
-      const resp = await fetch(CONFIG.APPS_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' }, // evita preflight CORS
-        body: JSON.stringify({ action, data }),
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const result = await resp.json();
-      if (result.success) {
-        // Invalida cache para forçar releitura da sheet
-        clearCache();
-      }
-      return result;
+      const payload = encodeURIComponent(JSON.stringify({ action, data }));
+      const url = `${CONFIG.APPS_SCRIPT_URL}?payload=${payload}`;
+
+      await fetch(url, { method: 'GET', mode: 'no-cors' });
+
+      // no-cors → resposta opaque, não conseguimos verificar sucesso.
+      // Aguarda 1.5s para o Apps Script processar, depois invalida cache.
+      await new Promise(r => setTimeout(r, 1500));
+      clearCache();
+      console.log(`[API] Apps Script: ${action} enviado`);
+      return { success: true };
+
     } catch (err) {
       console.error('[API] Apps Script error:', err.message);
-      Toast.show('Erro ao guardar na planilha — a guardar localmente', 'warning');
       return null;
     }
   }
