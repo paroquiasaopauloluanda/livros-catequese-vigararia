@@ -188,7 +188,7 @@ const API = (() => {
     return _safe(() => _delete('catechesis_records', id));
   }
 
-  // ─── Utilizadores (perfis) ────────────────────────────────────────────────
+  // ─── Utilizadores ────────────────────────────────────────────────────────
   async function getUsers() {
     return _get('user_profiles', '?select=*,parish:parishes(id,parish_name)&order=username.asc');
   }
@@ -202,18 +202,54 @@ const API = (() => {
     }));
   }
 
-  // Criar utilizador requer a service_role key (segurança).
-  // Em vez disso, o admin faz "invite" pelo Supabase Dashboard,
-  // e o perfil é criado aqui depois.
-  async function createUserProfile(userId, data) {
-    return _safe(() => _post('user_profiles', {
+  // Cria utilizador no Supabase Auth + perfil na mesma operação
+  // Usa o endpoint /auth/v1/admin/users que requer a service_role key.
+  // Como não podemos expor a service_role no frontend, usamos uma
+  // Supabase Edge Function ou — mais simples — o signUp normal com
+  // email fictício e depois inserimos o perfil.
+  async function createUser(data) {
+    // Passo 1: Cria a conta Auth com email fictício (username@vigararia.internal)
+    const email    = CONFIG.usernameToEmail(data.username);
+    const password = data.password;
+
+    const signupResp = await fetch(`${CONFIG.SUPABASE_URL}/auth/v1/signup`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': CONFIG.SUPABASE_ANON_KEY },
+      body:    JSON.stringify({ email, password }),
+    });
+
+    const signupData = await signupResp.json();
+    if (!signupResp.ok) {
+      const msg = signupData.msg || signupData.message || signupData.error_description || 'Erro ao criar conta';
+      Toast.show(msg, 'error');
+      return { success: false, error: msg };
+    }
+
+    // O Supabase pode devolver user directamente ou dentro de session
+    const userId = signupData.user?.id || signupData.id;
+    if (!userId) {
+      Toast.show('Conta criada mas ID não obtido. Verifica se "Confirm email" está desactivado no Supabase.', 'warning');
+      return { success: false, error: 'ID não obtido — desactiva "Confirm email" em Authentication → Providers → Email' };
+    }
+
+    // Passo 2: Cria o perfil com o token de admin (do utilizador autenticado actual)
+    const profileResp = await _post('user_profiles', {
       id:           userId,
-      username:     data.username,
+      username:     data.username.toLowerCase().trim(),
       display_name: data.display_name || data.username,
-      role:         data.role,
+      role:         data.role         || 'parish',
       parish_id:    data.parish_id    || null,
       status:       'active',
-    }));
+    });
+
+    return { success: true, user_id: userId };
+  }
+
+  async function resetPassword(username, newPassword) {
+    // Para redefinir password precisamos de saber o email interno
+    const email = CONFIG.usernameToEmail(username);
+    // Isto só funciona com service_role — por agora informa o admin
+    return { success: false, error: 'Reset de password requer o painel Supabase: Authentication → Users → "..." → Reset password' };
   }
 
   return {
@@ -221,6 +257,6 @@ const API = (() => {
     getParishes, createParish, updateParish, deleteParish,
     getBooks,   createBook,   updateBook,   deleteBook,
     getRecords, createRecord, updateRecord, deleteRecord,
-    getUsers,   updateUserProfile, createUserProfile,
+    getUsers,   createUser,   updateUserProfile, resetPassword,
   };
 })();

@@ -1,25 +1,29 @@
 /**
  * config.js — Configuração central
- * Preenche SUPABASE_URL e SUPABASE_ANON_KEY com os valores do teu projecto
- * Settings → API no dashboard do Supabase
  */
 const CONFIG = {
   // ─── Supabase ─────────────────────────────────────────────────────────────
-  // SUPABASE_URL:      'COLE_O_PROJECT_URL_AQUI',       // ex: https://xyzxyz.supabase.co
-  // SUPABASE_ANON_KEY: 'COLE_O_ANON_KEY_AQUI',          // começa com eyJ...
-  SUPABASE_URL:      'https://dbtsqhgtsyibcxfhkzfh.supabase.co',       // ex: https://xyzxyz.supabase.co
-  SUPABASE_ANON_KEY: 'sb_publishable_7ihCGJq2FPTm0L6C0Ulkdw_M_RzLZKw',          // começa com eyJ...
+  SUPABASE_URL:      'https://dbtsqhgtsyibcxfhkzfh.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_7ihCGJq2FPTm0L6C0Ulkdw_M_RzLZKw',
+
+  // Domínio interno usado para criar emails fictícios
+  // O utilizador NUNCA vê isto — é só para o Supabase Auth internamente
+  INTERNAL_DOMAIN: 'vigararia.internal',
 
   // ─── Aplicação ────────────────────────────────────────────────────────────
   APP_NAME:        'Catequese Vigararia',
   APP_VERSION:     '2.0.0',
   LOCALE:          'pt-AO',
-  SESSION_TIMEOUT: 480, // minutos
+  SESSION_TIMEOUT: 480,
 
   ROLES:  { ADMIN: 'admin', PARISH: 'parish' },
   STATUS: { DRAFT: 'draft', SUBMITTED: 'submitted', CONFIRMED: 'confirmed' },
+
+  // Converte username para email interno
+  usernameToEmail(username) {
+    return `${username.toLowerCase().trim()}@${this.INTERNAL_DOMAIN}`;
+  },
 };
 
-Object.freeze(CONFIG);
 Object.freeze(CONFIG.ROLES);
 Object.freeze(CONFIG.STATUS);
