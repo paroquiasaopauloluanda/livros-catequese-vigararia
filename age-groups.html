@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Faixas Etárias — Catequese Vigararia</title>
+  <link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body>
+<div class="app-layout"><div class="main-content">
+  <header class="page-header">
+    <div><div class="page-title">Faixas Etárias</div><div class="page-subtitle">Gestão das faixas etárias da catequese</div></div>
+    <div class="header-actions">
+      <button class="btn btn-primary btn-sm" onclick="openCreate()">➕ Nova faixa</button>
+    </div>
+  </header>
+  <main class="page-body">
+    <div class="card"><div id="tbl"><div class="loading-overlay"><div class="spinner spinner-dark"></div></div></div></div>
+  </main>
+</div></div>
+<div id="globalModal" class="modal-overlay"></div>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/utils.js"></script>
+<script src="assets/js/auth.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/layout.js"></script>
+<script>
+Layout.render('age-groups');
+Auth.requireAuth(CONFIG.ROLES.ADMIN);
+let all = [];
+
+async function load() {
+  all = await API.getAgeGroups();
+  Utils.buildTable('tbl', [
+    { key:'age_group',   label:'Faixa Etária', render:v=>`<strong>${v}</strong>` },
+    { key:'description', label:'Descrição' },
+  ], all, [
+    { label:'✏', type:'edit',   fn:'editAG',   idKey:'id' },
+    { label:'🗑', type:'delete', fn:'deleteAG', idKey:'id' },
+  ]);
+}
+
+function form(a={}) {
+  return `<div class="form-grid">
+    <div class="form-group"><label>Nome <span class="req">*</span></label>
+      <input type="text" id="f_n" value="${a.age_group||''}" placeholder="ex: Adolescentes"></div>
+    <div class="form-group"><label>Descrição</label>
+      <input type="text" id="f_d" value="${a.description||''}" placeholder="ex: 13–17 anos"></div>
+  </div>`;
+}
+
+function openCreate() {
+  Utils.showModal('Nova Faixa Etária', form(),
+    `<button class="btn btn-primary" onclick="createAG()">➕ Criar</button>
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`);
+}
+async function createAG() {
+  const n = document.getElementById('f_n').value.trim();
+  if (!n) { Toast.show('Nome obrigatório','error'); return; }
+  const res = await API.createAgeGroup({ age_group:n, description:document.getElementById('f_d').value.trim() });
+  if (res.success) { Utils.closeModal(); Toast.show('Criada!','success'); await load(); }
+}
+
+function editAG(id) {
+  const a = all.find(x=>x.id===id); if(!a) return;
+  Utils.showModal('Editar Faixa Etária', form(a),
+    `<button class="btn btn-primary" onclick="saveAG('${id}')">💾 Guardar</button>
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`);
+}
+async function saveAG(id) {
+  const n = document.getElementById('f_n').value.trim();
+  if (!n) { Toast.show('Nome obrigatório','error'); return; }
+  const res = await API.updateAgeGroup(id, { age_group:n, description:document.getElementById('f_d').value.trim() });
+  if (res.success) { Utils.closeModal(); Toast.show('Guardado!','success'); await load(); }
+}
+
+function deleteAG(id) {
+  const a = all.find(x=>x.id===id);
+  Utils.confirmAction(`Eliminar "${a?.age_group}"? Registos associados podem ser afectados.`, async()=>{
+    const res = await API.deleteAgeGroup(id);
+    if (res.success) { Toast.show('Eliminado!','success'); await load(); }
+  });
+}
+load();
+</script>
+</body>
+</html>

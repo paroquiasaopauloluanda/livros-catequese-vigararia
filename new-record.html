@@ -5,17 +5,18 @@
   <title>Novo Registo — Catequese Vigararia</title>
   <link rel="stylesheet" href="assets/css/main.css">
   <style>
-    .wizard-steps{display:flex;gap:0;margin-bottom:24px;background:var(--surface-2);border-radius:var(--radius-xl);padding:6px;border:1px solid var(--border);}
-    .wizard-step{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px;border-radius:var(--radius-lg);transition:all .2s;font-size:13px;color:var(--text-3);}
+    .wizard-steps{display:flex;gap:4px;margin-bottom:20px;background:var(--surface-2);border-radius:var(--radius-xl);padding:5px;border:1px solid var(--border);}
+    .wizard-step{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px;border-radius:var(--radius-lg);transition:all .2s;font-size:12px;color:var(--text-3);}
     .wizard-step.active{background:var(--surface);box-shadow:var(--shadow-sm);color:var(--primary);font-weight:600;}
     .wizard-step.done{color:var(--success);}
-    .wizard-step-num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;background:var(--border);color:var(--text-3);}
+    .wizard-step-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--border);color:var(--text-3);}
     .wizard-step.active .wizard-step-num{background:var(--primary);color:#fff;}
     .wizard-step.done  .wizard-step-num{background:var(--success);color:#fff;}
-    .wizard-panel{display:none;} .wizard-panel.active{display:block;animation:fadeUp .2s;}
-    @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-    .book-suggestion{padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;transition:all .15s;font-size:13.5px;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
-    .book-suggestion:hover{border-color:var(--primary-light);background:var(--primary-pale);}
+    .wizard-panel{display:none;}.wizard-panel.active{display:block;animation:fadeUp .2s;}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    .book-suggestion{padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;transition:all .15s;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;-webkit-tap-highlight-color:transparent;}
+    .book-suggestion:hover,.book-suggestion:active{border-color:var(--primary-light);background:var(--primary-pale);}
+    .dup-warning{background:var(--warning-light);border:1px solid var(--warning);border-radius:var(--radius-md);padding:10px 12px;font-size:13px;color:var(--warning);margin-bottom:12px;display:none;}
   </style>
 </head>
 <body>
@@ -25,7 +26,7 @@
     <div class="header-actions"><a href="records.html" class="btn btn-secondary btn-sm">← Voltar</a></div>
   </header>
   <main class="page-body">
-    <div style="max-width:680px;margin:0 auto;">
+    <div style="max-width:640px;margin:0 auto;">
       <div class="wizard-steps">
         <div class="wizard-step active" id="tab1"><div class="wizard-step-num">1</div><span>Contexto</span></div>
         <div class="wizard-step" id="tab2"><div class="wizard-step-num">2</div><span>Livro</span></div>
@@ -35,33 +36,43 @@
 
         <!-- Passo 1 -->
         <div class="wizard-panel active" id="p1">
-          <h3 style="font-family:var(--font-serif);font-size:17px;margin-bottom:16px;">Contexto do registo</h3>
+          <h3 style="font-family:var(--font-serif);font-size:16px;margin-bottom:14px;">Contexto do registo</h3>
           <div class="form-grid">
-            <div class="form-group full"><label>Paróquia</label>
-              <input id="parishDisplay" type="text" readonly style="background:var(--surface-2)"></div>
-            <div class="form-group"><label>Etapa <span class="req">*</span></label>
-              <select id="stage_id"><option value="">— Seleccionar —</option></select></div>
-            <div class="form-group"><label>Faixa etária <span class="req">*</span></label>
-              <select id="age_id"><option value="">— Seleccionar —</option></select></div>
+            <div class="form-group full">
+              <label>Paróquia</label>
+              <input id="parishDisplay" type="text" readonly style="background:var(--surface-2)">
+            </div>
+            <div class="form-group">
+              <label>Etapa <span class="req">*</span></label>
+              <select id="stage_id"><option value="">— Seleccionar —</option></select>
+            </div>
+            <div class="form-group">
+              <label>Faixa etária <span class="req">*</span></label>
+              <select id="age_id"><option value="">— Seleccionar —</option></select>
+            </div>
           </div>
-          <div class="form-actions" style="margin-top:20px;">
+          <div id="dupWarning1" class="dup-warning">⚠ Já existe um registo para esta combinação de etapa e faixa etária nesta paróquia.</div>
+          <div class="form-actions" style="margin-top:16px;">
             <button class="btn btn-primary" onclick="goNext(1)">Continuar →</button>
           </div>
         </div>
 
         <!-- Passo 2 -->
         <div class="wizard-panel" id="p2">
-          <h3 style="font-family:var(--font-serif);font-size:17px;margin-bottom:8px;">Livro utilizado</h3>
-          <p style="font-size:13px;color:var(--text-3);margin-bottom:16px;">Selecciona uma sugestão ou escreve o nome livremente.</p>
+          <h3 style="font-family:var(--font-serif);font-size:16px;margin-bottom:6px;">Livro utilizado</h3>
+          <p style="font-size:13px;color:var(--text-3);margin-bottom:14px;">Selecciona uma sugestão ou escreve o nome livremente.</p>
           <div id="suggestions"></div>
-          <div class="form-group"><label>Nome do livro <span class="req">*</span></label>
-            <input type="text" id="book_name" placeholder="ex: Caminho da Fé"></div>
-          <div class="form-grid" style="margin-top:14px;">
+          <div class="form-group" style="margin-top:4px;">
+            <label>Nome do livro <span class="req">*</span></label>
+            <input type="text" id="book_name" placeholder="ex: Caminho da Fé" oninput="checkDupLive()">
+          </div>
+          <div id="dupWarning2" class="dup-warning">⚠ Já existe um registo com este livro para a etapa e faixa etária seleccionadas.</div>
+          <div class="form-grid" style="margin-top:12px;">
             <div class="form-group"><label>Autor</label><input type="text" id="author"></div>
             <div class="form-group"><label>Editora</label><input type="text" id="publisher"></div>
             <div class="form-group"><label>Ano</label><input type="number" id="year" min="1900" max="2099"></div>
           </div>
-          <div class="form-actions" style="margin-top:20px;">
+          <div class="form-actions" style="margin-top:16px;">
             <button class="btn btn-primary" onclick="goNext(2)">Continuar →</button>
             <button class="btn btn-secondary" onclick="goTo(1)">← Voltar</button>
           </div>
@@ -69,14 +80,14 @@
 
         <!-- Passo 3 -->
         <div class="wizard-panel" id="p3">
-          <h3 style="font-family:var(--font-serif);font-size:17px;margin-bottom:16px;">Confirmar e submeter</h3>
-          <div id="review" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:18px;"></div>
+          <h3 style="font-family:var(--font-serif);font-size:16px;margin-bottom:14px;">Confirmar e submeter</h3>
+          <div id="review" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:16px;"></div>
           <div class="form-group">
             <label>Observações (opcional)</label>
-            <textarea id="notes" placeholder="Notas sobre este livro…"></textarea>
+            <textarea id="notes" placeholder="Notas adicionais sobre este livro…"></textarea>
           </div>
-          <div id="submitErr" class="alert alert-danger" style="display:none;"></div>
-          <div class="form-actions" style="margin-top:20px;">
+          <div id="submitErr" class="alert alert-danger" style="display:none;margin-top:10px;"></div>
+          <div class="form-actions" style="margin-top:16px;">
             <button class="btn btn-success" id="submitBtn" onclick="submit()">✓ Submeter</button>
             <button class="btn btn-secondary" onclick="goTo(2)">← Voltar</button>
           </div>
@@ -95,42 +106,67 @@
 <script>
 Layout.render('new-record');
 const user = Auth.getCurrentUser();
-let stages=[], ageGroups=[], books=[], parishes=[];
+let stages=[], ageGroups=[], books=[], parishes=[], existingRecords=[];
 
 async function init() {
-  [stages, ageGroups, books, parishes] = await Promise.all([
-    API.getStages(), API.getAgeGroups(), API.getBooks(), API.getParishes()
+  [stages, ageGroups, books, parishes, existingRecords] = await Promise.all([
+    API.getStages(), API.getAgeGroups(), API.getBooks(), API.getParishes(),
+    API.getRecords(user.parish_id),
   ]);
-  const myParish = parishes.find(p=>p.id===user.parish_id);
-  document.getElementById('parishDisplay').value = myParish?.parish_name || user.parish_id || '—';
 
+  const myParish = parishes.find(p=>p.id===user.parish_id);
+  document.getElementById('parishDisplay').value = myParish?.parish_name || '—';
+
+  // Etapas agrupadas por categoria
   const sel = document.getElementById('stage_id');
   const cats = [...new Set(stages.map(s=>s.category))];
   cats.forEach(cat => {
     const g = document.createElement('optgroup'); g.label = cat;
-    stages.filter(s=>s.category===cat).forEach(s => {
+    stages.filter(s=>s.category===cat).forEach(s=>{
       const o = document.createElement('option'); o.value=s.id; o.textContent=s.stage_name; g.appendChild(o);
     });
     sel.appendChild(g);
   });
-  ageGroups.forEach(a => {
-    const o = document.createElement('option'); o.value=a.id; o.textContent=`${a.age_group} (${a.description})`;
-    document.getElementById('age_id').appendChild(o);
+
+  // Faixas etárias
+  const aSel = document.getElementById('age_id');
+  ageGroups.forEach(a=>{
+    const o = document.createElement('option'); o.value=a.id;
+    o.textContent = a.description ? `${a.age_group} (${a.description})` : a.age_group;
+    aSel.appendChild(o);
   });
-  document.getElementById('stage_id').addEventListener('change', showSuggestions);
+
+  sel.addEventListener('change', ()=>{ showSuggestions(); checkDupLive(); });
+  document.getElementById('age_id').addEventListener('change', ()=>{ checkDupLive(); });
 }
 
+// ─── Sugestões de livros ──────────────────────────────────────────────────────
+// CORRECÇÃO: compara stage_name directamente (sem remover º) com recommended_stage
 function showSuggestions() {
   const sid = document.getElementById('stage_id').value;
   const stage = stages.find(s=>s.id===sid);
-  if (!stage) { document.getElementById('suggestions').innerHTML=''; return; }
-  const rel = books.filter(b => b.recommended_stage && b.recommended_stage.includes(stage.stage_name.replace(/[º°]/g,'').trim()));
+  if (!stage || !books.length) { document.getElementById('suggestions').innerHTML=''; return; }
+
+  // Compara o stage_name completo com recommended_stage (case-insensitive)
+  const stageName = stage.stage_name.trim().toLowerCase();
+  const rel = books.filter(b => {
+    if (!b.recommended_stage) return false;
+    const rec = b.recommended_stage.trim().toLowerCase();
+    // Correspondência exacta OU o stage name contém a recomendação OU vice-versa
+    return rec === stageName || stageName.includes(rec) || rec.includes(stageName);
+  });
+
   if (!rel.length) { document.getElementById('suggestions').innerHTML=''; return; }
+
   document.getElementById('suggestions').innerHTML =
-    `<p style="font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">📚 Sugestões</p>` +
-    rel.map(b=>`<div class="book-suggestion" onclick='fillBook(${JSON.stringify(b)})'>
-      <div><strong>${b.book_name}</strong><div style="font-size:12px;color:var(--text-3)">${b.author||''} · ${b.publisher||''} · ${b.year||''}</div></div>
-      <span style="font-size:12px;color:var(--primary-light)">Usar →</span></div>`).join('') +
+    `<p style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">📚 Sugestões para ${stage.stage_name}</p>` +
+    rel.map(b=>`<div class="book-suggestion" onclick='fillBook(${JSON.stringify({...b}).replace(/'/g,"&#39;")})'>
+      <div>
+        <strong style="font-size:13.5px">${b.book_name}</strong>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px">${[b.author,b.publisher,b.year].filter(Boolean).join(' · ')}</div>
+      </div>
+      <span style="font-size:12px;color:var(--primary-light);flex-shrink:0">Usar →</span>
+    </div>`).join('') +
     `<p style="font-size:12px;color:var(--text-3);margin:10px 0 8px;">Ou escreve livremente:</p>`;
 }
 
@@ -139,24 +175,50 @@ function fillBook(b) {
   document.getElementById('author').value     = b.author||'';
   document.getElementById('publisher').value  = b.publisher||'';
   document.getElementById('year').value       = b.year||'';
+  checkDupLive();
 }
 
+// ─── Verificação de duplicado em tempo real ───────────────────────────────────
+function checkDupLive() {
+  const stageId  = document.getElementById('stage_id').value;
+  const ageId    = document.getElementById('age_id').value;
+  const bookName = (document.getElementById('book_name')?.value||'').trim().toLowerCase();
+
+  // Aviso na etapa 1: mesma etapa + faixa etária
+  if (stageId && ageId) {
+    const dup1 = existingRecords.some(r => r.stage_id===stageId && r.age_id===ageId);
+    document.getElementById('dupWarning1').style.display = dup1 ? '' : 'none';
+  }
+
+  // Aviso na etapa 2: mesmo livro + etapa + faixa
+  const w2 = document.getElementById('dupWarning2');
+  if (w2 && stageId && ageId && bookName) {
+    const dup2 = existingRecords.some(r =>
+      r.stage_id===stageId && r.age_id===ageId && (r.book_name||'').toLowerCase()===bookName
+    );
+    w2.style.display = dup2 ? '' : 'none';
+  }
+}
+
+// ─── Navegação wizard ─────────────────────────────────────────────────────────
 function goTo(n) {
   for (let i=1;i<=3;i++) {
     document.getElementById(`p${i}`).classList.toggle('active', i===n);
     const t = document.getElementById(`tab${i}`);
     t.classList.remove('active','done');
-    if (i===n) t.classList.add('active'); else if (i<n) t.classList.add('done');
+    if (i===n) t.classList.add('active'); else if(i<n) t.classList.add('done');
   }
+  window.scrollTo(0,0);
 }
 
 function goNext(from) {
   if (from===1) {
-    if (!document.getElementById('stage_id').value) { Toast.show('Selecciona a etapa','error'); return; }
-    if (!document.getElementById('age_id').value)   { Toast.show('Selecciona a faixa etária','error'); return; }
-    goTo(2);
+    if (!document.getElementById('stage_id').value)  { Toast.show('Selecciona a etapa','error'); return; }
+    if (!document.getElementById('age_id').value)    { Toast.show('Selecciona a faixa etária','error'); return; }
+    showSuggestions(); goTo(2);
   } else if (from===2) {
-    if (!document.getElementById('book_name').value.trim()) { Toast.show('Indica o nome do livro','error'); return; }
+    const book = document.getElementById('book_name').value.trim();
+    if (!book) { Toast.show('Indica o nome do livro','error'); return; }
     buildReview(); goTo(3);
   }
 }
@@ -174,17 +236,19 @@ function buildReview() {
     ['Editora',      document.getElementById('publisher').value||'—'],
     ['Ano',          document.getElementById('year').value||'—'],
   ];
-  document.getElementById('review').innerHTML = `<table style="width:100%;font-size:13.5px;border-collapse:collapse;">
-    ${rows.map(([l,v])=>`<tr>
-      <td style="padding:7px 0;color:var(--text-3);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;width:35%;border-bottom:1px solid var(--border)">${l}</td>
-      <td style="padding:7px 0;border-bottom:1px solid var(--border);font-weight:${l==='Livro'?600:400}">${v}</td>
-    </tr>`).join('')}
-  </table>`;
+  document.getElementById('review').innerHTML = `
+    <table style="width:100%;font-size:13px;border-collapse:collapse;">
+      ${rows.map(([l,v])=>`<tr>
+        <td style="padding:6px 0;color:var(--text-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;width:38%;border-bottom:1px solid var(--border)">${l}</td>
+        <td style="padding:6px 0;border-bottom:1px solid var(--border);font-weight:${l==='Livro'?600:400}">${v}</td>
+      </tr>`).join('')}
+    </table>`;
 }
 
 async function submit() {
   Utils.setLoading('submitBtn', true, 'A submeter…');
   document.getElementById('submitErr').style.display='none';
+
   const res = await API.createRecord({
     parish_id: user.parish_id,
     stage_id:  document.getElementById('stage_id').value,
@@ -195,12 +259,14 @@ async function submit() {
     year:      document.getElementById('year').value,
     notes:     document.getElementById('notes').value.trim(),
   });
+
   if (res.success) {
-    Toast.show('Registo submetido!','success');
+    Toast.show('Registo submetido com sucesso!','success');
     setTimeout(()=>{ location.href='records.html'; }, 900);
   } else {
-    document.getElementById('submitErr').textContent = res.error||'Erro ao submeter';
-    document.getElementById('submitErr').style.display='flex';
+    const errEl = document.getElementById('submitErr');
+    errEl.textContent = res.error||'Erro ao submeter';
+    errEl.style.display='flex';
     Utils.setLoading('submitBtn', false, '✓ Submeter');
   }
 }

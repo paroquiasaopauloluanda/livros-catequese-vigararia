@@ -21,10 +21,10 @@
       <button class="tab-btn" onclick="switchTab('use',this)">📊 Em uso</button>
     </div>
     <div class="tab-panel active" id="tab-rec">
-      <div class="card"><div id="tblRec"><div class="loading-overlay"><div class="spinner"></div></div></div></div>
+      <div class="card"><div id="tblRec"><div class="loading-overlay"><div class="spinner spinner-dark"></div></div></div></div>
     </div>
     <div class="tab-panel" id="tab-use">
-      <div class="card"><div id="tblUse"><div class="loading-overlay"><div class="spinner"></div></div></div></div>
+      <div class="card"><div id="tblUse"><div class="loading-overlay"><div class="spinner spinner-dark"></div></div></div></div>
     </div>
   </main>
 </div></div>
@@ -38,7 +38,7 @@
 <script>
 Layout.render('books');
 Auth.requireAuth(CONFIG.ROLES.ADMIN);
-let allBooks=[], allRecords=[], stages=[], ageGroups=[];
+let allBooks=[], allRecords=[], stages=[], ageGroups=[], parishes=[];
 
 function switchTab(name,btn) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -48,8 +48,8 @@ function switchTab(name,btn) {
 }
 
 async function load() {
-  [allBooks, allRecords, stages, ageGroups] = await Promise.all([
-    API.getBooks(), API.getRecords(), API.getStages(), API.getAgeGroups()
+  [allBooks, allRecords, stages, ageGroups, parishes] = await Promise.all([
+    API.getBooks(), API.getRecords(), API.getStages(), API.getAgeGroups(), API.getParishes()
   ]);
   renderRec(); renderUse();
 }
@@ -58,7 +58,7 @@ function renderRec() {
   Utils.buildTable('tblRec', [
     { key:'book_name',         label:'Livro',    render:v=>`<strong>${v}</strong>` },
     { key:'author',            label:'Autor' },
-    { key:'publisher',         label:'Editora' },
+    { key:'publisher',         label:'Editora',  },
     { key:'year',              label:'Ano' },
     { key:'recommended_stage', label:'Etapa recomendada' },
     { key:'recommended_age',   label:'Faixa etária' },
@@ -69,22 +69,81 @@ function renderRec() {
 }
 
 function renderUse() {
+  const parishMap = Object.fromEntries(parishes.map(p=>[p.id,p.parish_name]));
   const stats = {};
+
   allRecords.forEach(r => {
-    if (!stats[r.book_name]) stats[r.book_name]={ book_name:r.book_name, author:r.author||'', count:0, parishes:new Set() };
-    stats[r.book_name].count++;
-    stats[r.book_name].parishes.add(r.parish_id);
+    const key = r.book_name;
+    if (!stats[key]) stats[key] = { book_name:key, author:r.author||'', records:[], parishIds:new Set() };
+    stats[key].records.push(r);
+    stats[key].parishIds.add(r.parish_id);
   });
-  const data = Object.values(stats).sort((a,b)=>b.count-a.count)
-    .map(b=>({ ...b, parish_count:b.parishes.size }));
+
+  const data = Object.values(stats).sort((a,b)=>b.records.length-a.records.length).map(b=>({
+    ...b, count:b.records.length, parish_count:b.parishIds.size,
+  }));
+
+  // Guarda para uso nos modais
+  window._bookStats = stats;
+  window._parishMap = parishMap;
+
   Utils.buildTable('tblUse', [
     { key:'book_name',    label:'Livro',      render:v=>`<strong>${v}</strong>` },
     { key:'author',       label:'Autor' },
-    { key:'count',        label:'Registos',   render:v=>`<span class="badge badge-blue">${v}</span>` },
-    { key:'parish_count', label:'Paróquias',  render:v=>`<span class="badge badge-purple">${v}</span>` },
+    { key:'count',        label:'Registos',
+      render:(v,r) => `<span class="badge badge-blue badge-link" title="Ver registos" onclick="showRecordsModal('${r.book_name.replace(/'/g,"\\'")}')">${v}</span>` },
+    { key:'parish_count', label:'Paróquias',
+      render:(v,r) => `<span class="badge badge-purple badge-link" title="Ver paróquias" onclick="showParishesModal('${r.book_name.replace(/'/g,"\\'")}')">${v}</span>` },
   ], data, []);
 }
 
+// Modal: registos de um livro
+function showRecordsModal(bookName) {
+  const stat = window._bookStats[bookName];
+  if (!stat) return;
+  const parishMap = window._parishMap;
+
+  const stageMap = Object.fromEntries((window._stages||[]).map(s=>[s.id,s.stage_name]));
+  const ageMap   = Object.fromEntries((window._ages||[]).map(a=>[a.id,a.age_group]));
+
+  const rows = stat.records.map(r=>`<tr>
+    <td>${parishMap[r.parish_id]||r.parish?.parish_name||'—'}</td>
+    <td>${r.stage?.stage_name||stageMap[r.stage_id]||'—'}</td>
+    <td>${r.age?.age_group||ageMap[r.age_id]||'—'}</td>
+    <td>${Utils.statusBadge(r.status)}</td>
+    <td>${Utils.formatDate(r.created_at)}</td>
+  </tr>`).join('');
+
+  Utils.showModal(`Registos — ${bookName}`, `
+    <div class="table-responsive">
+      <table class="data-table" style="min-width:420px">
+        <thead><tr><th>Paróquia</th><th>Etapa</th><th>Faixa etária</th><th>Estado</th><th>Data</th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-3)">Sem registos</td></tr>'}</tbody>
+      </table>
+    </div>`);
+}
+
+// Modal: paróquias que usam um livro
+function showParishesModal(bookName) {
+  const stat = window._bookStats[bookName];
+  if (!stat) return;
+  const parishMap = window._parishMap;
+
+  const parishList = [...stat.parishIds].map(pid=>{
+    const name = parishMap[pid] || pid;
+    const count = stat.records.filter(r=>r.parish_id===pid).length;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="font-weight:500">⛪ ${name}</span>
+      <span class="badge badge-blue">${count} registo${count!==1?'s':''}</span>
+    </div>`;
+  }).join('');
+
+  Utils.showModal(`Paróquias — ${bookName}`, `
+    <p style="font-size:13px;color:var(--text-3);margin-bottom:12px">${stat.parishIds.size} paróquia${stat.parishIds.size!==1?'s':''} usam este livro</p>
+    <div>${parishList}</div>`);
+}
+
+// Formulário de livro
 function form(b={}) {
   const sOpts = stages.map(s=>`<option value="${s.stage_name}" ${b.recommended_stage===s.stage_name?'selected':''}>${s.stage_name}</option>`).join('');
   const aOpts = ageGroups.map(a=>`<option value="${a.age_group}" ${b.recommended_age===a.age_group?'selected':''}>${a.age_group}</option>`).join('');
@@ -102,14 +161,7 @@ function form(b={}) {
 }
 
 function getFormData() {
-  return {
-    book_name:         document.getElementById('f_n').value.trim(),
-    author:            document.getElementById('f_a').value.trim(),
-    publisher:         document.getElementById('f_p').value.trim(),
-    year:              document.getElementById('f_y').value,
-    recommended_stage: document.getElementById('f_s').value,
-    recommended_age:   document.getElementById('f_ag').value,
-  };
+  return { book_name:document.getElementById('f_n').value.trim(), author:document.getElementById('f_a').value.trim(), publisher:document.getElementById('f_p').value.trim(), year:document.getElementById('f_y').value, recommended_stage:document.getElementById('f_s').value, recommended_age:document.getElementById('f_ag').value };
 }
 
 function openCreate() {
@@ -117,44 +169,37 @@ function openCreate() {
     `<button class="btn btn-primary" onclick="createBook()">➕ Adicionar</button>
      <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`);
 }
-
 async function createBook() {
-  const d=getFormData();
-  if (!d.book_name) { Toast.show('Nome obrigatório','error'); return; }
+  const d=getFormData(); if(!d.book_name){Toast.show('Nome obrigatório','error');return;}
   const res=await API.createBook(d);
-  if (res.success) { Utils.closeModal(); Toast.show('Livro adicionado!','success'); await load(); }
+  if(res.success){Utils.closeModal();Toast.show('Livro adicionado!','success');await load();}
 }
 
 function editBook(id) {
-  const b=allBooks.find(b=>b.id===id); if (!b) return;
+  const b=allBooks.find(b=>b.id===id); if(!b) return;
   Utils.showModal('Editar Livro', form(b),
     `<button class="btn btn-primary" onclick="saveBook('${id}')">💾 Guardar</button>
      <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`);
 }
-
 async function saveBook(id) {
-  const d=getFormData();
-  if (!d.book_name) { Toast.show('Nome obrigatório','error'); return; }
+  const d=getFormData(); if(!d.book_name){Toast.show('Nome obrigatório','error');return;}
   const res=await API.updateBook(id,d);
-  if (res.success) { Utils.closeModal(); Toast.show('Guardado!','success'); await load(); }
+  if(res.success){Utils.closeModal();Toast.show('Guardado!','success');await load();}
 }
 
 function deleteBook(id) {
   const b=allBooks.find(b=>b.id===id);
-  Utils.confirmAction(`Eliminar "${b?.book_name}"?`, async ()=>{
+  Utils.confirmAction(`Eliminar "${b?.book_name}"?`, async()=>{
     const res=await API.deleteBook(id);
-    if (res.success) { Toast.show('Eliminado!','success'); await load(); }
+    if(res.success){Toast.show('Eliminado!','success');await load();}
   });
 }
 
 function exportExcel() {
-  Utils.exportToExcel(allBooks.map(b=>({
-    'Nome':b.book_name,'Autor':b.author,'Editora':b.publisher,'Ano':b.year,
-    'Etapa recomendada':b.recommended_stage,'Faixa etária':b.recommended_age,
-  })), 'livros', 'Livros');
+  Utils.exportToExcel(allBooks.map(b=>({'Nome':b.book_name,'Autor':b.author,'Editora':b.publisher,'Ano':b.year,'Etapa recomendada':b.recommended_stage,'Faixa etária':b.recommended_age})),'livros','Livros');
 }
 
-load();
+load().then(()=>{ window._stages=stages; window._ages=ageGroups; });
 </script>
 </body>
 </html>
