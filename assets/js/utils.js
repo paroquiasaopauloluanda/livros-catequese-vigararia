@@ -188,7 +188,7 @@ const Utils = (() => {
       </div>`;
     m.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    m.addEventListener('click', e => { if (e.target === m) closeModal(); });
+    m.onclick = e => { if (e.target === m) closeModal(); };
   }
 
   function closeModal() {
