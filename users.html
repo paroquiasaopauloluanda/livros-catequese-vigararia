@@ -7,22 +7,23 @@
 </head>
 <body>
 <div class="app-layout"><div class="main-content">
+
   <header class="page-header">
-    <div><div class="page-title">Utilizadores</div><div class="page-subtitle">Gestão de acessos</div></div>
+    <div>
+      <div class="page-title">Utilizadores</div>
+      <div class="page-subtitle">Gestão de acessos ao sistema</div>
+    </div>
     <div class="header-actions">
-      <button class="btn btn-primary btn-sm" onclick="openCreate()">➕ Novo</button>
+      <button class="btn btn-primary btn-sm" onclick="openCreate()">➕ Novo utilizador</button>
     </div>
   </header>
+
   <main class="page-body">
-    <div class="alert alert-info" style="margin-bottom:16px;">
-      ℹ Para criar utilizadores, o admin convida pelo email via Supabase Dashboard → Authentication → Users → "Invite user".
-      Depois define aqui o perfil (paróquia e role).
+    <div class="card">
+      <div id="tbl"><div class="loading-overlay"><div class="spinner"></div></div></div>
     </div>
-    <div class="alert alert-warning">
-      ⚡ Em alternativa, usa o botão "Novo" abaixo para pré-configurar um perfil com o UUID do utilizador já criado no Supabase.
-    </div>
-    <div class="card"><div id="tbl"><div class="loading-overlay"><div class="spinner"></div></div></div></div>
   </main>
+
 </div></div>
 <div id="globalModal" class="modal-overlay"></div>
 
@@ -34,118 +35,186 @@
 <script>
 Layout.render('users');
 Auth.requireAuth(CONFIG.ROLES.ADMIN);
-let allUsers=[], allParishes=[];
+
+let allUsers = [], allParishes = [];
 
 async function load() {
   [allUsers, allParishes] = await Promise.all([API.getUsers(), API.getParishes()]);
+
   Utils.buildTable('tbl', [
-    { key:'username',     label:'Utilizador',  render:v=>`<strong>${v}</strong>` },
-    { key:'display_name', label:'Nome' },
-    { key:'role',         label:'Perfil',      render:v=>Utils.statusBadge(v) },
-    { key:'parish',       label:'Paróquia',    render:(_,r)=>r.parish?.parish_name||'— Todas —' },
-    { key:'status',       label:'Estado',      render:v=>Utils.statusBadge(v) },
+    { key: 'username',     label: 'Utilizador',  render: v => `<strong>${v}</strong>` },
+    { key: 'display_name', label: 'Nome' },
+    { key: 'role',         label: 'Perfil',      render: v => Utils.statusBadge(v) },
+    { key: 'parish',       label: 'Paróquia',    render: (_, r) => r.parish?.parish_name || '— Todas —' },
+    { key: 'status',       label: 'Estado',      render: v => Utils.statusBadge(v) },
   ], allUsers, [
-    { label:'✏', type:'edit',   fn:'editUser',   idKey:'id' },
-    { label:'🗑', type:'delete', fn:'deleteUser', idKey:'id' },
+    { label: '✏', type: 'edit',   fn: 'editUser',   idKey: 'id' },
+    { label: '🗑', type: 'delete', fn: 'deleteUser', idKey: 'id' },
   ]);
 }
 
-function parishOpts(sel='') {
-  return allParishes.map(p=>`<option value="${p.id}" ${sel===p.id?'selected':''}>${p.parish_name}</option>`).join('');
+// ─── Criar utilizador ─────────────────────────────────────────────────────────
+function parishOpts(sel = '') {
+  return allParishes.map(p =>
+    `<option value="${p.id}" ${sel === p.id ? 'selected' : ''}>${p.parish_name}</option>`
+  ).join('');
 }
 
 function openCreate() {
-  Utils.showModal('Associar Perfil de Utilizador', `
-    <div class="alert alert-info" style="margin-bottom:14px;">
-      Cole o UUID do utilizador criado no painel Supabase (Authentication → Users).
-    </div>
+  Utils.showModal('Novo Utilizador', `
     <div class="form-grid">
-      <div class="form-group full"><label>UUID do utilizador <span class="req">*</span></label>
-        <input type="text" id="f_id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
-      <div class="form-group"><label>Username (para exibição)</label>
-        <input type="text" id="f_uname" placeholder="ex: sjose"></div>
-      <div class="form-group"><label>Nome de exibição</label>
-        <input type="text" id="f_dname" placeholder="ex: Coord. São José"></div>
-      <div class="form-group"><label>Perfil</label>
-        <select id="f_role" onchange="toggleParish()">
+      <div class="form-group">
+        <label>Utilizador <span class="req">*</span></label>
+        <input type="text" id="f_u" placeholder="ex: sjose" autocapitalize="none">
+        <div class="form-help">Sem espaços nem caracteres especiais</div>
+      </div>
+      <div class="form-group">
+        <label>Nome de exibição</label>
+        <input type="text" id="f_d" placeholder="ex: Coord. São José">
+      </div>
+      <div class="form-group">
+        <label>Senha <span class="req">*</span></label>
+        <input type="password" id="f_p" placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="form-group">
+        <label>Confirmar senha <span class="req">*</span></label>
+        <input type="password" id="f_p2">
+      </div>
+      <div class="form-group">
+        <label>Perfil <span class="req">*</span></label>
+        <select id="f_r" onchange="toggleParishField('f_pw')">
           <option value="parish">Paróquia</option>
           <option value="admin">Administrador</option>
-        </select></div>
-      <div class="form-group" id="f_parish_wrap"><label>Paróquia</label>
-        <select id="f_parish"><option value="">— Seleccionar —</option>${parishOpts()}</select></div>
+        </select>
+      </div>
+      <div class="form-group" id="f_pw">
+        <label>Paróquia <span class="req">*</span></label>
+        <select id="f_par">
+          <option value="">— Seleccionar —</option>
+          ${parishOpts()}
+        </select>
+      </div>
     </div>`,
-    `<button class="btn btn-primary" onclick="createProfile()">➕ Associar</button>
-     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`);
+    `<button class="btn btn-primary" id="createBtn" onclick="createUser()">➕ Criar</button>
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`
+  );
 }
 
-function toggleParish() {
-  const wrap = document.getElementById('f_parish_wrap');
-  if (wrap) wrap.style.display = document.getElementById('f_role').value==='admin' ? 'none' : '';
+function toggleParishField(wrapId) {
+  const wrap = document.getElementById(wrapId);
+  if (wrap) wrap.style.display = document.getElementById('f_r').value === 'admin' ? 'none' : '';
 }
 
-async function createProfile() {
-  const uid = document.getElementById('f_id').value.trim();
-  if (!uid) { Toast.show('UUID obrigatório','error'); return; }
-  const role = document.getElementById('f_role').value;
-  const res = await API.createUserProfile(uid, {
-    username:     document.getElementById('f_uname').value.trim() || uid.slice(0,8),
-    display_name: document.getElementById('f_dname').value.trim(),
+async function createUser() {
+  const username = document.getElementById('f_u').value.trim();
+  const pass     = document.getElementById('f_p').value;
+  const pass2    = document.getElementById('f_p2').value;
+  const role     = document.getElementById('f_r').value;
+  const parish   = document.getElementById('f_par')?.value;
+
+  // Validações
+  if (!username)                { Toast.show('O utilizador é obrigatório', 'error'); return; }
+  if (!/^[a-zA-Z0-9_-]+$/.test(username)) { Toast.show('Utilizador: apenas letras, números, _ e -', 'error'); return; }
+  if (pass.length < 6)          { Toast.show('A senha deve ter pelo menos 6 caracteres', 'error'); return; }
+  if (pass !== pass2)           { Toast.show('As senhas não coincidem', 'error'); return; }
+  if (role === 'parish' && !parish) { Toast.show('Selecciona a paróquia', 'error'); return; }
+
+  const btn = document.getElementById('createBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> A criar…'; }
+
+  const res = await API.createUser({
+    username,
+    password:     pass,
+    display_name: document.getElementById('f_d').value.trim() || username,
     role,
-    parish_id:    role==='admin' ? null : document.getElementById('f_parish').value || null,
+    parish_id:    role === 'admin' ? null : parish,
   });
-  if (res.success) { Utils.closeModal(); Toast.show('Perfil criado!','success'); await load(); }
+
+  if (res.success) {
+    Utils.closeModal();
+    Toast.show(`Utilizador "${username}" criado com sucesso!`, 'success');
+    await load();
+  } else {
+    if (btn) { btn.disabled = false; btn.innerHTML = '➕ Criar'; }
+  }
 }
 
+// ─── Editar perfil ────────────────────────────────────────────────────────────
 function editUser(id) {
-  const u = allUsers.find(u=>u.id===id); if (!u) return;
+  const u = allUsers.find(u => u.id === id);
+  if (!u) return;
+
   Utils.showModal('Editar Utilizador', `
     <div class="form-grid">
-      <div class="form-group"><label>Username</label><input type="text" id="f_u" value="${u.username||''}" readonly style="background:var(--surface-2)"></div>
-      <div class="form-group"><label>Nome de exibição</label><input type="text" id="f_d" value="${u.display_name||''}"></div>
-      <div class="form-group"><label>Perfil</label>
-        <select id="f_r" onchange="toggleParishEdit()">
-          <option value="parish" ${u.role==='parish'?'selected':''}>Paróquia</option>
-          <option value="admin"  ${u.role==='admin' ?'selected':''}>Administrador</option>
-        </select></div>
-      <div class="form-group" id="ep_wrap"><label>Paróquia</label>
-        <select id="f_p"><option value="">— Nenhuma —</option>${parishOpts(u.parish_id)}</select></div>
-      <div class="form-group"><label>Estado</label>
-        <select id="f_s">
-          <option value="active"   ${u.status==='active'  ?'selected':''}>Activo</option>
-          <option value="inactive" ${u.status==='inactive'?'selected':''}>Inactivo</option>
-        </select></div>
+      <div class="form-group">
+        <label>Utilizador</label>
+        <input type="text" value="${u.username || ''}" readonly style="background:var(--surface-2)">
+      </div>
+      <div class="form-group">
+        <label>Nome de exibição</label>
+        <input type="text" id="e_d" value="${u.display_name || ''}">
+      </div>
+      <div class="form-group">
+        <label>Perfil</label>
+        <select id="e_r" onchange="toggleParishField('e_pw')">
+          <option value="parish" ${u.role === 'parish' ? 'selected' : ''}>Paróquia</option>
+          <option value="admin"  ${u.role === 'admin'  ? 'selected' : ''}>Administrador</option>
+        </select>
+      </div>
+      <div class="form-group" id="e_pw" ${u.role === 'admin' ? 'style="display:none"' : ''}>
+        <label>Paróquia</label>
+        <select id="e_par">
+          <option value="">— Nenhuma —</option>
+          ${parishOpts(u.parish_id)}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Estado</label>
+        <select id="e_s">
+          <option value="active"   ${u.status === 'active'   ? 'selected' : ''}>Activo</option>
+          <option value="inactive" ${u.status === 'inactive' ? 'selected' : ''}>Inactivo</option>
+        </select>
+      </div>
     </div>`,
     `<button class="btn btn-primary" onclick="saveUser('${id}')">💾 Guardar</button>
-     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`);
-  setTimeout(()=>{ if(u.role==='admin') { const w=document.getElementById('ep_wrap'); if(w) w.style.display='none'; } }, 50);
-}
-
-function toggleParishEdit() {
-  const w=document.getElementById('ep_wrap');
-  if(w) w.style.display = document.getElementById('f_r').value==='admin'?'none':'';
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`
+  );
 }
 
 async function saveUser(id) {
-  const role = document.getElementById('f_r').value;
+  const role = document.getElementById('e_r').value;
   const res = await API.updateUserProfile(id, {
-    display_name: document.getElementById('f_d').value.trim(),
+    display_name: document.getElementById('e_d').value.trim(),
     role,
-    parish_id:    role==='admin' ? null : document.getElementById('f_p').value || null,
-    status:       document.getElementById('f_s').value,
+    parish_id:    role === 'admin' ? null : document.getElementById('e_par').value || null,
+    status:       document.getElementById('e_s').value,
   });
-  if (res.success) { Utils.closeModal(); Toast.show('Guardado!','success'); await load(); }
+  if (res.success) {
+    Utils.closeModal();
+    Toast.show('Utilizador actualizado!', 'success');
+    await load();
+  }
 }
 
+// ─── Eliminar ─────────────────────────────────────────────────────────────────
 function deleteUser(id) {
   const me = Auth.getCurrentUser();
-  if (me.id === id) { Toast.show('Não podes eliminar a tua própria conta','error'); return; }
-  Utils.confirmAction('Eliminar este utilizador?', async ()=>{
-    // Elimina apenas o perfil — a conta auth fica no Supabase para ser gerida lá
+  if (me.id === id) { Toast.show('Não podes eliminar a tua própria conta', 'error'); return; }
+  const u = allUsers.find(u => u.id === id);
+  Utils.confirmAction(`Eliminar o utilizador "${u?.username}"? Esta acção não pode ser desfeita.`, async () => {
     const resp = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/user_profiles?id=eq.${id}`, {
-      method:'DELETE', headers:{ 'apikey':CONFIG.SUPABASE_ANON_KEY, 'Authorization':`Bearer ${Auth.getAccessToken()}` }
+      method: 'DELETE',
+      headers: {
+        'apikey':        CONFIG.SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${Auth.getAccessToken()}`,
+      },
     });
-    if (resp.ok) { Toast.show('Perfil eliminado!','success'); await load(); }
-    else Toast.show('Erro ao eliminar','error');
+    if (resp.ok) {
+      Toast.show('Utilizador eliminado!', 'success');
+      await load();
+    } else {
+      Toast.show('Erro ao eliminar', 'error');
+    }
   });
 }
 
