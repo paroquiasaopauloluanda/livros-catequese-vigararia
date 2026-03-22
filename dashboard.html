@@ -10,248 +10,180 @@
 <body>
 <div class="app-layout">
   <div class="main-content">
-
     <header class="page-header">
       <div>
         <div class="page-title">Dashboard</div>
-        <div class="page-subtitle" id="headerSubtitle">Visão geral da vigararia</div>
+        <div class="page-subtitle">Visão geral da vigararia</div>
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary btn-sm" onclick="refreshData()">↺ Actualizar</button>
-        <button class="btn btn-secondary btn-sm" onclick="Utils.printPage()">🖨 Imprimir</button>
+        <button class="btn btn-secondary btn-sm" onclick="load()">↺ Actualizar</button>
+        <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 Imprimir</button>
       </div>
     </header>
 
     <main class="page-body">
-
-      <!-- KPIs -->
       <div class="kpi-grid" id="kpiGrid">
-        <div class="loading-overlay"><div class="spinner"></div> A carregar…</div>
+        <div class="loading-overlay" style="grid-column:1/-1"><div class="spinner"></div></div>
       </div>
 
       <!-- Barra de uniformização -->
-      <div class="card" style="margin-bottom:20px;" id="uniformCard">
+      <div class="card" style="margin-bottom:20px;">
         <div class="card-header">
           <div class="card-title">Taxa de Uniformização</div>
           <span id="uniformBadge" class="badge badge-gray">—</span>
         </div>
         <div class="card-body">
-          <p style="font-size:13.5px;color:var(--text-3);margin-bottom:10px;">
-            Percentagem de etapas da catequese onde todas as paróquias com registos utilizam o <em>mesmo</em> livro.
-          </p>
-          <div class="uniformity-bar-wrap">
-            <div class="uniformity-bar-fill" id="uniformBar" style="width:0%"></div>
-          </div>
-          <div id="uniformDetail" style="margin-top:10px;font-size:13px;color:var(--text-3);"></div>
+          <p style="font-size:13px;color:var(--text-3);margin-bottom:10px;">Etapas onde todas as paróquias com registos usam o mesmo livro.</p>
+          <div class="uniformity-bar-wrap"><div class="uniformity-bar-fill" id="uniformBar" style="width:0%"></div></div>
+          <div id="uniformDetail" style="margin-top:8px;font-size:13px;color:var(--text-3);"></div>
         </div>
       </div>
 
-      <!-- Gráficos linha 1 -->
       <div class="card-grid">
         <div class="card">
           <div class="card-header"><div class="card-title">Livros mais utilizados</div></div>
-          <div class="card-body">
-            <div class="chart-container" style="height:260px;">
-              <canvas id="chartTopBooks"></canvas>
-            </div>
-          </div>
+          <div class="card-body"><div style="height:260px;"><canvas id="chartBooks"></canvas></div></div>
         </div>
         <div class="card">
           <div class="card-header"><div class="card-title">Registos por Paróquia</div></div>
-          <div class="card-body">
-            <div class="chart-container" style="height:260px;">
-              <canvas id="chartByParish"></canvas>
-            </div>
-          </div>
+          <div class="card-body"><div style="height:260px;"><canvas id="chartParish"></canvas></div></div>
         </div>
       </div>
 
-      <!-- Gráficos linha 2 -->
       <div class="card-grid" style="margin-top:20px;">
         <div class="card">
           <div class="card-header"><div class="card-title">Registos por Etapa</div></div>
-          <div class="card-body">
-            <div class="chart-container" style="height:260px;">
-              <canvas id="chartByStage"></canvas>
-            </div>
-          </div>
+          <div class="card-body"><div style="height:260px;"><canvas id="chartStage"></canvas></div></div>
         </div>
         <div class="card">
-          <div class="card-header">
-            <div class="card-title">Comparação de Livros por Etapa</div>
-          </div>
-          <div class="card-body">
-            <div id="comparisonTable">
-              <div class="loading-overlay"><div class="spinner"></div></div>
-            </div>
+          <div class="card-header"><div class="card-title">Divergências por Etapa</div></div>
+          <div class="card-body" id="divergenceTable">
+            <div class="loading-overlay"><div class="spinner"></div></div>
           </div>
         </div>
       </div>
-
     </main>
   </div>
 </div>
 
 <script src="assets/js/config.js"></script>
 <script src="assets/js/utils.js"></script>
-<script src="assets/js/api.js"></script>
 <script src="assets/js/auth.js"></script>
+<script src="assets/js/api.js"></script>
 <script src="assets/js/layout.js"></script>
 <script>
 Layout.render('dashboard');
+const COLORS = ['#1a4a6b','#2563a0','#c0862a','#2d7a4f','#5c3d8a','#b83232','#0891b2','#854d0e'];
+const charts = {};
 
-const CHART_COLORS = [
-  '#1a4a6b','#2563a0','#c0862a','#2d7a4f','#5c3d8a',
-  '#b83232','#0891b2','#854d0e','#065f46','#6d28d9'
-];
-
-let charts = {};
-
-async function loadDashboard() {
+async function load() {
   try {
-    const [records, parishes, stages, ageGroups] = await Promise.all([
-      API.getRecords(),
-      API.getParishes(),
-      API.fetchSheet(CONFIG.SHEETS.STAGES),
-      API.fetchSheet(CONFIG.SHEETS.AGE_GROUPS),
+    const [records, parishes, stages] = await Promise.all([
+      API.getRecords(), API.getParishes(), API.getStages()
     ]);
 
-    const stats = Utils.computeStats(records, parishes, stages);
+    const parishMap = Object.fromEntries(parishes.map(p => [p.id, p.parish_name]));
+    const stageMap  = Object.fromEntries(stages.map(s => [s.id, s.stage_name]));
 
-    // Mapas para nomes
-    const parishMap = Object.fromEntries(parishes.map(p => [p.parish_id, p.parish_name]));
-    const stageMap  = Object.fromEntries(stages.map(s => [s.stage_id, s.stage_name]));
-
-    // ─── KPIs ─────────────────────────────────────────────────────────────
+    // ── KPIs
+    const bookSet = new Set(records.map(r => r.book_name));
+    const parishSet = new Set(records.map(r => r.parish_id));
     document.getElementById('kpiGrid').innerHTML = `
       <div class="kpi-card kpi-card-accent">
-        <div class="kpi-icon">📋</div>
-        <div class="kpi-value">${records.length}</div>
-        <div class="kpi-label">Total de registos</div>
-      </div>
+        <div class="kpi-icon">📋</div><div class="kpi-value">${records.length}</div>
+        <div class="kpi-label">Total de registos</div></div>
       <div class="kpi-card kpi-card-accent accent-gold">
-        <div class="kpi-icon">⛪</div>
-        <div class="kpi-value">${stats.activeParishes}</div>
-        <div class="kpi-label">Paróquias com registos</div>
-      </div>
+        <div class="kpi-icon">⛪</div><div class="kpi-value">${parishSet.size}</div>
+        <div class="kpi-label">Paróquias com registos</div></div>
       <div class="kpi-card kpi-card-accent accent-green">
-        <div class="kpi-icon">📚</div>
-        <div class="kpi-value">${stats.topBooks.length}</div>
-        <div class="kpi-label">Livros distintos em uso</div>
-      </div>
+        <div class="kpi-icon">📚</div><div class="kpi-value">${bookSet.size}</div>
+        <div class="kpi-label">Livros distintos</div></div>
       <div class="kpi-card kpi-card-accent accent-warn">
-        <div class="kpi-icon">📐</div>
-        <div class="kpi-value">${Object.keys(stats.byStage).length}</div>
-        <div class="kpi-label">Etapas com registos</div>
-      </div>
-    `;
+        <div class="kpi-icon">📐</div><div class="kpi-value">${new Set(records.map(r=>r.stage_id)).size}</div>
+        <div class="kpi-label">Etapas com registos</div></div>`;
 
-    // ─── Uniformização ────────────────────────────────────────────────────
-    const uniformRate = stats.uniformRate;
-    document.getElementById('uniformBar').style.width = uniformRate + '%';
-    document.getElementById('uniformBadge').textContent = uniformRate + '%';
-    document.getElementById('uniformBadge').className =
-      uniformRate >= 70 ? 'badge badge-green' :
-      uniformRate >= 40 ? 'badge badge-amber' : 'badge badge-red';
-
-    const uniformStages = Object.entries(stats.stageBooks)
-      .filter(([,books]) => books.size === 1).length;
-    const totalS = Object.keys(stats.stageBooks).length;
-    document.getElementById('uniformDetail').textContent =
-      `${uniformStages} de ${totalS} etapas com registos estão uniformizadas.`;
-
-    // ─── Gráfico: Livros mais usados ──────────────────────────────────────
-    destroyChart('chartTopBooks');
-    charts.topBooks = new Chart(document.getElementById('chartTopBooks'), {
-      type: 'bar',
-      data: {
-        labels: stats.topBooks.map(b => b.name.length > 22 ? b.name.slice(0,22)+'…' : b.name),
-        datasets: [{ data: stats.topBooks.map(b => b.count), backgroundColor: CHART_COLORS, borderRadius: 6, borderSkipped: false }]
-      },
-      options: chartOptions('horizontal')
+    // ── Uniformização
+    const stageBooks = {};
+    records.forEach(r => {
+      if (!stageBooks[r.stage_id]) stageBooks[r.stage_id] = new Set();
+      stageBooks[r.stage_id].add(r.book_name);
     });
+    const total = Object.keys(stageBooks).length;
+    const uniform = Object.values(stageBooks).filter(s => s.size === 1).length;
+    const rate = total ? Math.round(uniform/total*100) : 0;
+    document.getElementById('uniformBar').style.width = rate + '%';
+    document.getElementById('uniformBadge').textContent = rate + '%';
+    document.getElementById('uniformBadge').className = `badge ${rate>=70?'badge-green':rate>=40?'badge-amber':'badge-red'}`;
+    document.getElementById('uniformDetail').textContent = `${uniform} de ${total} etapas com registos estão uniformizadas.`;
 
-    // ─── Gráfico: Por paróquia ────────────────────────────────────────────
-    const parishLabels = Object.keys(stats.byParish).map(id => parishMap[id] || id);
-    const parishData   = Object.values(stats.byParish);
-    destroyChart('chartByParish');
-    charts.byParish = new Chart(document.getElementById('chartByParish'), {
-      type: 'doughnut',
-      data: {
-        labels: parishLabels,
-        datasets: [{ data: parishData, backgroundColor: CHART_COLORS, borderWidth: 2, borderColor: '#fff' }]
-      },
-      options: { ...chartOptions('doughnut'), cutout: '60%' }
-    });
+    // ── Livros mais usados
+    const bookCount = {};
+    records.forEach(r => { bookCount[r.book_name] = (bookCount[r.book_name]||0)+1; });
+    const topBooks = Object.entries(bookCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    mkChart('chartBooks', 'bar', topBooks.map(b=>b[0].slice(0,22)), topBooks.map(b=>b[1]), 'horizontal');
 
-    // ─── Gráfico: Por etapa ───────────────────────────────────────────────
-    const stageLabels = Object.keys(stats.byStage).map(id => stageMap[id] || id);
-    const stageData   = Object.values(stats.byStage);
-    destroyChart('chartByStage');
-    charts.byStage = new Chart(document.getElementById('chartByStage'), {
-      type: 'bar',
-      data: {
-        labels: stageLabels,
-        datasets: [{ label: 'Registos', data: stageData, backgroundColor: '#1a4a6b', borderRadius: 6, borderSkipped: false }]
-      },
-      options: chartOptions('vertical')
-    });
+    // ── Por paróquia
+    const byParish = {};
+    records.forEach(r => { byParish[r.parish_id] = (byParish[r.parish_id]||0)+1; });
+    mkChart('chartParish', 'doughnut',
+      Object.keys(byParish).map(id => (parishMap[id]||id).split(' ').slice(-2).join(' ')),
+      Object.values(byParish), 'doughnut');
 
-    // ─── Tabela de comparação por etapa ──────────────────────────────────
-    const comparisonRows = Object.entries(stats.stageBooks).map(([stageId, books]) => {
-      const stageName = stageMap[stageId] || stageId;
-      const bookList  = [...books].join(', ');
-      const uniform   = books.size === 1;
+    // ── Por etapa
+    const byStage = {};
+    records.forEach(r => { byStage[r.stage_id] = (byStage[r.stage_id]||0)+1; });
+    mkChart('chartStage', 'bar',
+      Object.keys(byStage).map(id => stageMap[id]||id),
+      Object.values(byStage), 'vertical');
+
+    // ── Tabela divergências
+    const rows = Object.entries(stageBooks).map(([sid, books]) => {
+      const nm = stageMap[sid]||sid;
+      const ok = books.size===1;
       return `<tr>
-        <td><strong>${stageName}</strong></td>
-        <td>${books.size}</td>
-        <td style="max-width:200px;font-size:12px;">${bookList}</td>
-        <td>${uniform ? '<span class="badge badge-green">✓ Uniforme</span>' : '<span class="badge badge-red">✗ Divergente</span>'}</td>
+        <td><strong>${nm}</strong></td>
+        <td><span class="badge ${ok?'badge-green':'badge-red'}">${books.size} livro${books.size>1?'s':''}</span></td>
+        <td style="font-size:12px;color:var(--text-3)">${[...books].join(', ')}</td>
       </tr>`;
     }).join('');
+    document.getElementById('divergenceTable').innerHTML = `
+      <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Etapa</th><th>Estado</th><th>Livros</th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--text-3)">Sem registos</td></tr>'}</tbody>
+      </table></div>`;
 
-    document.getElementById('comparisonTable').innerHTML = `
-      <div class="table-responsive">
-        <table class="data-table">
-          <thead><tr><th>Etapa</th><th>Livros distintos</th><th>Livros em uso</th><th>Estado</th></tr></thead>
-          <tbody>${comparisonRows || '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-3)">Sem dados</td></tr>'}</tbody>
-        </table>
-      </div>`;
-
-  } catch (err) {
-    console.error('[Dashboard]', err);
-    Toast.show('Erro ao carregar o dashboard', 'error');
+  } catch(e) {
+    console.error(e);
+    Toast.show('Erro ao carregar dashboard: ' + e.message, 'error');
   }
 }
 
-function destroyChart(id) {
-  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
-}
-
-function chartOptions(type) {
-  const base = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: type === 'doughnut', position: 'bottom', labels: { boxWidth: 12, padding: 14, font: { size: 12, family: "'DM Sans', sans-serif" } } },
-    }
+function mkChart(id, type, labels, data, mode) {
+  if (charts[id]) charts[id].destroy();
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  const opts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: mode==='doughnut', position:'bottom', labels:{ boxWidth:12, padding:12, font:{size:11} } } },
   };
-  if (type === 'horizontal') {
-    return { ...base, indexAxis: 'y', scales: { x: { beginAtZero: true, grid: { color: '#f0ede8' } }, y: { grid: { display: false }, ticks: { font: { size: 12 } } } } };
+  if (mode === 'horizontal') opts.indexAxis = 'y';
+  if (mode !== 'doughnut') {
+    opts.scales = {
+      x: { beginAtZero:true, grid:{ color:mode==='horizontal'?'#f0ede8':'transparent' }, ticks:{font:{size:11}, maxRotation:30} },
+      y: { beginAtZero:true, grid:{ color:mode==='vertical'?'#f0ede8':'transparent' }, ticks:{font:{size:11}} },
+    };
   }
-  if (type === 'vertical') {
-    return { ...base, scales: { y: { beginAtZero: true, grid: { color: '#f0ede8' } }, x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 35 } } } };
-  }
-  return base;
+  charts[id] = new Chart(ctx, {
+    type: type==='bar'?'bar':'doughnut',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: COLORS, borderRadius:5, borderSkipped:false, borderWidth:2, borderColor:'#fff' }]
+    },
+    options: opts,
+  });
 }
 
-async function refreshData() {
-  API.clearCache();
-  await loadDashboard();
-  Toast.show('Dados actualizados!', 'success');
-}
-
-loadDashboard();
+load();
 </script>
 </body>
 </html>

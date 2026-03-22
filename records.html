@@ -1,286 +1,165 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Os meus Registos — Catequese Vigararia</title>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Registos — Catequese Vigararia</title>
   <link rel="stylesheet" href="assets/css/main.css">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-<div class="app-layout">
-  <div class="main-content">
-
-    <header class="page-header">
-      <div>
-        <div class="page-title" id="pageTitle">Os meus Registos</div>
-        <div class="page-subtitle" id="pageSubtitle">Livros utilizados na catequese</div>
+<div class="app-layout"><div class="main-content">
+  <header class="page-header">
+    <div>
+      <div class="page-title" id="pageTitle">Os meus Registos</div>
+      <div class="page-subtitle">Livros utilizados na catequese</div>
+    </div>
+    <div class="header-actions">
+      <a href="new-record.html" class="btn btn-primary btn-sm">➕ Novo</a>
+      <button class="btn btn-secondary btn-sm" onclick="exportExcel()">📥 Excel</button>
+      <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨</button>
+    </div>
+  </header>
+  <main class="page-body">
+    <div class="card">
+      <div class="filters-bar">
+        <div class="filter-group"><label>Etapa</label>
+          <select class="filter-select" id="fStage" onchange="applyFilters()"><option value="">Todas</option></select></div>
+        <div class="filter-group"><label>Faixa etária</label>
+          <select class="filter-select" id="fAge" onchange="applyFilters()"><option value="">Todas</option></select></div>
+        <div class="filter-group"><label>Estado</label>
+          <select class="filter-select" id="fStatus" onchange="applyFilters()">
+            <option value="">Todos</option>
+            <option value="draft">Rascunho</option>
+            <option value="submitted">Submetido</option>
+            <option value="confirmed">Confirmado</option>
+          </select></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:18px" onclick="clearFilters()">✕</button>
       </div>
-      <div class="header-actions">
-        <a href="new-record.html" class="btn btn-primary btn-sm">➕ Novo registo</a>
-        <button class="btn btn-secondary btn-sm" onclick="exportExcel()">📥 Excel</button>
-        <button class="btn btn-secondary btn-sm" onclick="exportCSV()">📄 CSV</button>
-        <button class="btn btn-secondary btn-sm" onclick="Utils.printPage()">🖨 Imprimir</button>
-      </div>
-    </header>
-
-    <main class="page-body">
-
-      <!-- Filtros -->
-      <div class="card" style="margin-bottom:20px;">
-        <div class="filters-bar">
-          <div class="filter-group">
-            <label>Etapa</label>
-            <select class="filter-select" id="filterStage" onchange="applyFilters()">
-              <option value="">Todas as etapas</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label>Faixa etária</label>
-            <select class="filter-select" id="filterAge" onchange="applyFilters()">
-              <option value="">Todas</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label>Estado</label>
-            <select class="filter-select" id="filterStatus" onchange="applyFilters()">
-              <option value="">Todos</option>
-              <option value="draft">Rascunho</option>
-              <option value="submitted">Submetido</option>
-              <option value="confirmed">Confirmado</option>
-            </select>
-          </div>
-          <button class="btn btn-ghost btn-sm" style="margin-top:18px;" onclick="clearFilters()">✕ Limpar</button>
-        </div>
-
-        <!-- Tabela -->
-        <div id="recordsTableContainer">
-          <div class="loading-overlay"><div class="spinner"></div> A carregar registos…</div>
-        </div>
-      </div>
-
-    </main>
-  </div>
-</div>
-
-<!-- Modal edição -->
+      <div id="tbl"><div class="loading-overlay"><div class="spinner"></div></div></div>
+    </div>
+  </main>
+</div></div>
 <div id="globalModal" class="modal-overlay"></div>
 
 <script src="assets/js/config.js"></script>
 <script src="assets/js/utils.js"></script>
-<script src="assets/js/api.js"></script>
 <script src="assets/js/auth.js"></script>
+<script src="assets/js/api.js"></script>
 <script src="assets/js/layout.js"></script>
 <script>
 Layout.render('records');
+const user = Auth.getCurrentUser();
+const isAdmin = Auth.isAdmin();
+let allRecords=[], stages=[], ageGroups=[], parishes=[];
 
-const user       = Auth.getCurrentUser();
-const isAdmin    = Auth.isAdmin();
-let allRecords   = [];
-let parishes     = [];
-let stages       = [];
-let ageGroups    = [];
+async function load() {
+  [allRecords, stages, ageGroups, parishes] = await Promise.all([
+    API.getRecords(isAdmin ? null : user.parish_id),
+    API.getStages(), API.getAgeGroups(), API.getParishes(),
+  ]);
 
-async function loadRecords() {
-  try {
-    [allRecords, parishes, stages, ageGroups] = await Promise.all([
-      API.getRecords(isAdmin ? null : user.parish_id),
-      API.getParishes(),
-      API.fetchSheet(CONFIG.SHEETS.STAGES),
-      API.fetchSheet(CONFIG.SHEETS.AGE_GROUPS),
-    ]);
+  // Preenche filtros
+  const fStage = document.getElementById('fStage');
+  stages.forEach(s => fStage.innerHTML += `<option value="${s.id}">${s.stage_name}</option>`);
+  const fAge = document.getElementById('fAge');
+  ageGroups.forEach(a => fAge.innerHTML += `<option value="${a.id}">${a.age_group}</option>`);
 
-    // Preenche filtros
-    populateSelect('filterStage', stages, 'stage_id', 'stage_name');
-    populateSelect('filterAge', ageGroups, 'age_id', 'age_group');
-
-    // Título
-    if (!isAdmin) {
-      const myParish = parishes.find(p => p.parish_id === user.parish_id);
-      if (myParish) {
-        document.getElementById('pageTitle').textContent = myParish.parish_name;
-        document.getElementById('pageSubtitle').textContent = 'Os meus registos de livros';
-      }
-    }
-
-    renderTable(allRecords);
-  } catch (err) {
-    console.error('[Records]', err);
-    Toast.show('Erro ao carregar registos', 'error');
+  if (!isAdmin) {
+    const p = parishes.find(p=>p.id===user.parish_id);
+    if (p) document.getElementById('pageTitle').textContent = p.parish_name;
   }
-}
-
-function populateSelect(id, data, valKey, labelKey) {
-  const sel = document.getElementById(id);
-  if (!sel) return;
-  // Mantém a primeira opção
-  const firstOpt = sel.options[0].outerHTML;
-  sel.innerHTML = firstOpt + data.map(d => `<option value="${d[valKey]}">${d[labelKey]}</option>`).join('');
+  render(allRecords);
 }
 
 function applyFilters() {
-  const stageF  = document.getElementById('filterStage').value;
-  const ageF    = document.getElementById('filterAge').value;
-  const statusF = document.getElementById('filterStatus').value;
-
-  const filtered = allRecords.filter(r =>
-    (!stageF  || r.stage_id === stageF) &&
-    (!ageF    || r.age_id   === ageF)   &&
-    (!statusF || r.status   === statusF)
-  );
-  renderTable(filtered);
+  const sf = document.getElementById('fStage').value;
+  const af = document.getElementById('fAge').value;
+  const stf = document.getElementById('fStatus').value;
+  render(allRecords.filter(r =>
+    (!sf || r.stage_id===sf) && (!af || r.age_id===af) && (!stf || r.status===stf)
+  ));
 }
-
 function clearFilters() {
-  ['filterStage','filterAge','filterStatus'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  renderTable(allRecords);
+  ['fStage','fAge','fStatus'].forEach(id => document.getElementById(id).value='');
+  render(allRecords);
 }
 
-function getMappers() {
-  const parishMap = Object.fromEntries(parishes.map(p => [p.parish_id, p.parish_name]));
-  const stageMap  = Object.fromEntries(stages.map(s => [s.stage_id, s.stage_name]));
-  const ageMap    = Object.fromEntries(ageGroups.map(a => [a.age_id, a.age_group]));
-  return { parishMap, stageMap, ageMap };
-}
-
-function renderTable(records) {
-  const { parishMap, stageMap, ageMap } = getMappers();
-  const container = document.getElementById('recordsTableContainer');
-
-  if (!records.length) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">📋</div>
-        <p>Sem registos encontrados.</p>
-        <a href="new-record.html" class="btn btn-primary" style="margin-top:12px;">➕ Adicionar primeiro registo</a>
-      </div>`;
-    return;
-  }
-
-  const columns = [
-    ...(isAdmin ? [{ key: 'parish_id', label: 'Paróquia', render: v => parishMap[v] || v }] : []),
-    { key: 'stage_id',  label: 'Etapa',        render: v => stageMap[v] || v },
-    { key: 'age_id',    label: 'Faixa etária',  render: v => ageMap[v]   || v },
-    { key: 'book_name', label: 'Livro',          render: v => `<strong>${Utils.truncate(v, 35)}</strong>` },
-    { key: 'author',    label: 'Autor' },
-    { key: 'publisher', label: 'Editora' },
-    { key: 'year',      label: 'Ano' },
-    { key: 'notes',     label: 'Observações', render: v => Utils.truncate(v, 40) },
-    { key: 'status',    label: 'Estado',      render: v => Utils.statusBadge(v) },
-    { key: 'created_at', label: 'Data', render: v => Utils.formatDate(v) },
+function render(records) {
+  const cols = [
+    ...(isAdmin ? [{ key:'parish', label:'Paróquia', render:(_,r) => r.parish?.parish_name||'—' }] : []),
+    { key:'stage',     label:'Etapa',        render:(_,r) => r.stage?.stage_name||'—' },
+    { key:'age',       label:'Faixa etária', render:(_,r) => r.age?.age_group||'—' },
+    { key:'book_name', label:'Livro',        render:v => `<strong>${Utils.truncate(v,35)}</strong>` },
+    { key:'author',    label:'Autor' },
+    { key:'publisher', label:'Editora', },
+    { key:'year',      label:'Ano' },
+    { key:'status',    label:'Estado',  render:v => Utils.statusBadge(v) },
+    { key:'created_at',label:'Data',    render:v => Utils.formatDate(v) },
   ];
-
-  Utils.buildTable('recordsTableContainer', columns, records, [
-    { label: '✏ Editar',   type: 'edit',   fn: 'editRecord',   idKey: 'record_id' },
-    { label: '🗑 Eliminar', type: 'delete', fn: 'deleteRecord', idKey: 'record_id' },
+  Utils.buildTable('tbl', cols, records, [
+    { label:'✏', type:'edit',   fn:'editRec',   idKey:'id' },
+    { label:'🗑', type:'delete', fn:'deleteRec', idKey:'id' },
   ]);
 }
 
-// ─── Edição ───────────────────────────────────────────────────────────────────
-function editRecord(record_id) {
-  const { parishMap, stageMap, ageMap } = getMappers();
-  const r = allRecords.find(r => r.record_id === record_id);
+function editRec(id) {
+  const r = allRecords.find(r=>r.id===id);
   if (!r) return;
-
-  const stageOpts  = stages.map(s => `<option value="${s.stage_id}" ${r.stage_id===s.stage_id?'selected':''}>${s.stage_name}</option>`).join('');
-  const ageOpts    = ageGroups.map(a => `<option value="${a.age_id}" ${r.age_id===a.age_id?'selected':''}>${a.age_group}</option>`).join('');
-
+  const stageOpts = stages.map(s=>`<option value="${s.id}" ${r.stage_id===s.id?'selected':''}>${s.stage_name}</option>`).join('');
+  const ageOpts   = ageGroups.map(a=>`<option value="${a.id}" ${r.age_id===a.id?'selected':''}>${a.age_group}</option>`).join('');
   Utils.showModal('Editar Registo', `
     <div class="form-grid">
-      <div class="form-group">
-        <label>Etapa <span class="req">*</span></label>
-        <select id="e_stage">${stageOpts}</select>
-      </div>
-      <div class="form-group">
-        <label>Faixa etária <span class="req">*</span></label>
-        <select id="e_age">${ageOpts}</select>
-      </div>
-      <div class="form-group full">
-        <label>Nome do Livro <span class="req">*</span></label>
-        <input type="text" id="e_book" value="${r.book_name || ''}">
-      </div>
-      <div class="form-group">
-        <label>Autor</label>
-        <input type="text" id="e_author" value="${r.author || ''}">
-      </div>
-      <div class="form-group">
-        <label>Editora</label>
-        <input type="text" id="e_publisher" value="${r.publisher || ''}">
-      </div>
-      <div class="form-group">
-        <label>Ano</label>
-        <input type="number" id="e_year" value="${r.year || ''}" min="1900" max="2099">
-      </div>
-      <div class="form-group full">
-        <label>Observações</label>
-        <textarea id="e_notes">${r.notes || ''}</textarea>
-      </div>
+      <div class="form-group"><label>Etapa</label><select id="e_stage">${stageOpts}</select></div>
+      <div class="form-group"><label>Faixa etária</label><select id="e_age">${ageOpts}</select></div>
+      <div class="form-group full"><label>Livro <span class="req">*</span></label>
+        <input type="text" id="e_book" value="${r.book_name||''}"></div>
+      <div class="form-group"><label>Autor</label><input type="text" id="e_author" value="${r.author||''}"></div>
+      <div class="form-group"><label>Editora</label><input type="text" id="e_pub" value="${r.publisher||''}"></div>
+      <div class="form-group"><label>Ano</label><input type="number" id="e_year" value="${r.year||''}"></div>
+      <div class="form-group full"><label>Observações</label><textarea id="e_notes">${r.notes||''}</textarea></div>
     </div>`,
-    `<button class="btn btn-primary" onclick="saveEdit('${record_id}')">💾 Guardar</button>
-     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`
-  );
+    `<button class="btn btn-primary" onclick="saveRec('${id}')">💾 Guardar</button>
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`);
 }
 
-async function saveEdit(record_id) {
-  const data = {
-    stage_id:  document.getElementById('e_stage').value,
-    age_id:    document.getElementById('e_age').value,
-    book_name: document.getElementById('e_book').value.trim(),
+async function saveRec(id) {
+  const book = document.getElementById('e_book').value.trim();
+  if (!book) { Toast.show('O nome do livro é obrigatório','error'); return; }
+  const res = await API.updateRecord(id, {
+    stage_id: document.getElementById('e_stage').value,
+    age_id:   document.getElementById('e_age').value,
+    book_name: book,
     author:    document.getElementById('e_author').value.trim(),
-    publisher: document.getElementById('e_publisher').value.trim(),
+    publisher: document.getElementById('e_pub').value.trim(),
     year:      document.getElementById('e_year').value,
     notes:     document.getElementById('e_notes').value.trim(),
-  };
-  if (!data.book_name) { Toast.show('O nome do livro é obrigatório', 'error'); return; }
-  const result = await API.updateRecord(record_id, data);
-  if (result.success) {
-    Utils.closeModal();
-    Toast.show('Registo actualizado!', 'success');
-    API.clearCache();
-    await loadRecords();
-  } else {
-    Toast.show(result.error || 'Erro ao actualizar', 'error');
-  }
+  });
+  if (res.success) { Utils.closeModal(); Toast.show('Guardado!','success'); await load(); }
 }
 
-// ─── Eliminar ─────────────────────────────────────────────────────────────────
-function deleteRecord(record_id) {
-  Utils.confirmAction('Tens a certeza que queres eliminar este registo? Esta acção não pode ser desfeita.', async () => {
-    const result = await API.deleteRecord(record_id);
-    if (result.success) {
-      Toast.show('Registo eliminado!', 'success');
-      API.clearCache();
-      await loadRecords();
-    } else {
-      Toast.show(result.error || 'Não foi possível eliminar', 'error');
-    }
+function deleteRec(id) {
+  Utils.confirmAction('Eliminar este registo?', async () => {
+    const res = await API.deleteRecord(id);
+    if (res.success) { Toast.show('Eliminado!','success'); await load(); }
   });
 }
 
-// ─── Exportação ───────────────────────────────────────────────────────────────
-function getExportData() {
-  const { parishMap, stageMap, ageMap } = getMappers();
-  return allRecords.map(r => ({
-    'Paróquia':        parishMap[r.parish_id] || r.parish_id,
-    'Etapa':           stageMap[r.stage_id]   || r.stage_id,
-    'Faixa Etária':    ageMap[r.age_id]       || r.age_id,
-    'Livro':           r.book_name,
-    'Autor':           r.author,
-    'Editora':         r.publisher,
-    'Ano':             r.year,
-    'Observações':     r.notes,
-    'Estado':          r.status,
-    'Data de Registo': r.created_at,
-  }));
+function exportExcel() {
+  Utils.exportToExcel(allRecords.map(r=>({
+    'Paróquia':    r.parish?.parish_name||'',
+    'Etapa':       r.stage?.stage_name||'',
+    'Faixa etária':r.age?.age_group||'',
+    'Livro':       r.book_name,
+    'Autor':       r.author,
+    'Editora':     r.publisher,
+    'Ano':         r.year,
+    'Observações': r.notes,
+    'Estado':      r.status,
+    'Data':        r.created_at,
+  })), 'registos_catequese', 'Registos');
 }
 
-function exportExcel() { Utils.exportToExcel(getExportData(), 'registos_catequese', 'Registos'); }
-function exportCSV()   { Utils.exportToCSV(getExportData(), 'registos_catequese'); }
-
-loadRecords();
+load();
 </script>
 </body>
 </html>

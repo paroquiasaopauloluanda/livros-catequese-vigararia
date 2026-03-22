@@ -1,290 +1,154 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Todos os Registos — Catequese Vigararia</title>
   <link rel="stylesheet" href="assets/css/main.css">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-<div class="app-layout">
-  <div class="main-content">
-
-    <header class="page-header">
-      <div>
-        <div class="page-title">Todos os Registos</div>
-        <div class="page-subtitle">Vista global de todas as paróquias</div>
+<div class="app-layout"><div class="main-content">
+  <header class="page-header">
+    <div><div class="page-title">Todos os Registos</div><div class="page-subtitle">Vista global da vigararia</div></div>
+    <div class="header-actions">
+      <button class="btn btn-secondary btn-sm" onclick="exportExcel()">📥 Excel</button>
+      <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨</button>
+    </div>
+  </header>
+  <main class="page-body">
+    <div class="card">
+      <div class="filters-bar">
+        <div class="filter-group"><label>Paróquia</label>
+          <select class="filter-select" id="fParish" onchange="applyFilters()"><option value="">Todas</option></select></div>
+        <div class="filter-group"><label>Etapa</label>
+          <select class="filter-select" id="fStage" onchange="applyFilters()"><option value="">Todas</option></select></div>
+        <div class="filter-group"><label>Faixa etária</label>
+          <select class="filter-select" id="fAge" onchange="applyFilters()"><option value="">Todas</option></select></div>
+        <div class="filter-group"><label>Estado</label>
+          <select class="filter-select" id="fStatus" onchange="applyFilters()">
+            <option value="">Todos</option><option value="submitted">Submetido</option><option value="confirmed">Confirmado</option></select></div>
+        <div class="filter-group"><label>Livro</label>
+          <input class="filter-select" type="text" id="fBook" placeholder="Pesquisar…" oninput="applyFilters()"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:18px" onclick="clearFilters()">✕</button>
       </div>
-      <div class="header-actions">
-        <button class="btn btn-secondary btn-sm" onclick="exportExcel()">📥 Excel</button>
-        <button class="btn btn-secondary btn-sm" onclick="exportCSV()">📄 CSV</button>
-        <button class="btn btn-secondary btn-sm" onclick="Utils.printPage()">🖨 Imprimir</button>
-      </div>
-    </header>
-
-    <main class="page-body">
-      <div class="card">
-
-        <!-- Filtros -->
-        <div class="filters-bar">
-          <div class="filter-group">
-            <label>Paróquia</label>
-            <select class="filter-select" id="filterParish" onchange="applyFilters()">
-              <option value="">Todas</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label>Etapa</label>
-            <select class="filter-select" id="filterStage" onchange="applyFilters()">
-              <option value="">Todas</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label>Faixa etária</label>
-            <select class="filter-select" id="filterAge" onchange="applyFilters()">
-              <option value="">Todas</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label>Estado</label>
-            <select class="filter-select" id="filterStatus" onchange="applyFilters()">
-              <option value="">Todos</option>
-              <option value="draft">Rascunho</option>
-              <option value="submitted">Submetido</option>
-              <option value="confirmed">Confirmado</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label>Livro (pesquisa)</label>
-            <input type="text" class="filter-select" id="filterBook" placeholder="Nome do livro…" oninput="applyFilters()" style="padding:7px 12px;">
-          </div>
-          <button class="btn btn-ghost btn-sm" style="margin-top:18px;" onclick="clearFilters()">✕ Limpar</button>
-        </div>
-
-        <!-- Tabela -->
-        <div id="recordsTableContainer">
-          <div class="loading-overlay"><div class="spinner"></div> A carregar todos os registos…</div>
-        </div>
-      </div>
-    </main>
-  </div>
-</div>
-
+      <div id="tbl"><div class="loading-overlay"><div class="spinner"></div></div></div>
+    </div>
+  </main>
+</div></div>
 <div id="globalModal" class="modal-overlay"></div>
 
 <script src="assets/js/config.js"></script>
 <script src="assets/js/utils.js"></script>
-<script src="assets/js/api.js"></script>
 <script src="assets/js/auth.js"></script>
+<script src="assets/js/api.js"></script>
 <script src="assets/js/layout.js"></script>
 <script>
 Layout.render('global-records');
 Auth.requireAuth(CONFIG.ROLES.ADMIN);
-
-let allRecords = [], parishes = [], stages = [], ageGroups = [];
+let allRecords=[], stages=[], ageGroups=[], parishes=[];
 
 async function load() {
-  [allRecords, parishes, stages, ageGroups] = await Promise.all([
-    API.getRecords(),
-    API.getParishes(),
-    API.fetchSheet(CONFIG.SHEETS.STAGES),
-    API.fetchSheet(CONFIG.SHEETS.AGE_GROUPS),
+  [allRecords, stages, ageGroups, parishes] = await Promise.all([
+    API.getRecords(), API.getStages(), API.getAgeGroups(), API.getParishes()
   ]);
-
-  // Filtros
-  populateSelect('filterParish', parishes, 'parish_id', 'parish_name');
-  populateSelect('filterStage',  stages,   'stage_id',  'stage_name');
-  populateSelect('filterAge',    ageGroups,'age_id',    'age_group');
-
-  renderTable(allRecords);
-}
-
-function populateSelect(id, data, valKey, labelKey) {
-  const sel = document.getElementById(id);
-  if (!sel) return;
-  const firstOpt = sel.options[0].outerHTML;
-  sel.innerHTML = firstOpt + data.map(d => `<option value="${d[valKey]}">${d[labelKey]}</option>`).join('');
-}
-
-function getMappers() {
-  return {
-    parishMap: Object.fromEntries(parishes.map(p => [p.parish_id, p.parish_name])),
-    stageMap:  Object.fromEntries(stages.map(s => [s.stage_id, s.stage_name])),
-    ageMap:    Object.fromEntries(ageGroups.map(a => [a.age_id, a.age_group])),
-  };
+  const fP=document.getElementById('fParish'), fS=document.getElementById('fStage'), fA=document.getElementById('fAge');
+  parishes.forEach(p => fP.innerHTML+=`<option value="${p.id}">${p.parish_name}</option>`);
+  stages.forEach(s   => fS.innerHTML+=`<option value="${s.id}">${s.stage_name}</option>`);
+  ageGroups.forEach(a => fA.innerHTML+=`<option value="${a.id}">${a.age_group}</option>`);
+  render(allRecords);
 }
 
 function applyFilters() {
-  const parishF = document.getElementById('filterParish').value;
-  const stageF  = document.getElementById('filterStage').value;
-  const ageF    = document.getElementById('filterAge').value;
-  const statusF = document.getElementById('filterStatus').value;
-  const bookF   = document.getElementById('filterBook').value.toLowerCase().trim();
-
-  const filtered = allRecords.filter(r =>
-    (!parishF || r.parish_id === parishF) &&
-    (!stageF  || r.stage_id  === stageF)  &&
-    (!ageF    || r.age_id    === ageF)    &&
-    (!statusF || r.status    === statusF) &&
-    (!bookF   || (r.book_name || '').toLowerCase().includes(bookF))
-  );
-  renderTable(filtered);
+  const pf=document.getElementById('fParish').value, sf=document.getElementById('fStage').value,
+        af=document.getElementById('fAge').value,    stf=document.getElementById('fStatus').value,
+        bf=document.getElementById('fBook').value.toLowerCase();
+  render(allRecords.filter(r =>
+    (!pf||r.parish_id===pf)&&(!sf||r.stage_id===sf)&&(!af||r.age_id===af)&&
+    (!stf||r.status===stf)&&(!bf||(r.book_name||'').toLowerCase().includes(bf))
+  ));
 }
-
 function clearFilters() {
-  ['filterParish','filterStage','filterAge','filterStatus','filterBook'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  renderTable(allRecords);
+  ['fParish','fStage','fAge','fStatus','fBook'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  render(allRecords);
 }
 
-function renderTable(records) {
-  const { parishMap, stageMap, ageMap } = getMappers();
-
-  if (!records.length) {
-    document.getElementById('recordsTableContainer').innerHTML =
-      '<div class="empty-state"><div class="empty-icon">📋</div><p>Sem registos encontrados.</p></div>';
-    return;
-  }
-
-  const columns = [
-    { key: 'parish_id',  label: 'Paróquia',     render: v => `<strong>${parishMap[v] || v}</strong>` },
-    { key: 'stage_id',   label: 'Etapa',         render: v => stageMap[v] || v },
-    { key: 'age_id',     label: 'Faixa etária',  render: v => ageMap[v]   || v },
-    { key: 'book_name',  label: 'Livro',          render: v => Utils.truncate(v, 35) },
-    { key: 'author',     label: 'Autor' },
-    { key: 'publisher',  label: 'Editora' },
-    { key: 'year',       label: 'Ano' },
-    { key: 'status',     label: 'Estado',         render: v => Utils.statusBadge(v) },
-    { key: 'created_at', label: 'Data',           render: v => Utils.formatDate(v) },
+function render(records) {
+  const cols=[
+    { key:'parish',    label:'Paróquia',     render:(_,r)=>`<strong>${r.parish?.parish_name||'—'}</strong>` },
+    { key:'stage',     label:'Etapa',         render:(_,r)=>r.stage?.stage_name||'—' },
+    { key:'age',       label:'Faixa etária',  render:(_,r)=>r.age?.age_group||'—' },
+    { key:'book_name', label:'Livro',         render:v=>Utils.truncate(v,35) },
+    { key:'author',    label:'Autor' },
+    { key:'publisher', label:'Editora' },
+    { key:'status',    label:'Estado',        render:v=>Utils.statusBadge(v) },
+    { key:'created_at',label:'Data',          render:v=>Utils.formatDate(v) },
   ];
-
-  Utils.buildTable('recordsTableContainer', columns, records, [
-    { label: '✏ Editar',   type: 'edit',   fn: 'editRecord',   idKey: 'record_id' },
-    { label: '🗑 Eliminar', type: 'delete', fn: 'deleteRecord', idKey: 'record_id' },
-    { label: '✓ Confirmar', type: 'view',  fn: 'confirmRecord', idKey: 'record_id' },
+  Utils.buildTable('tbl', cols, records, [
+    { label:'✏',  type:'edit',   fn:'editRec',    idKey:'id' },
+    { label:'✓',  type:'view',   fn:'confirmRec', idKey:'id' },
+    { label:'🗑', type:'delete', fn:'deleteRec',  idKey:'id' },
   ]);
 }
 
-async function confirmRecord(record_id) {
-  const result = await API.updateRecord(record_id, { status: 'confirmed' });
-  if (result.success) {
-    Toast.show('Registo confirmado!', 'success');
-    API.clearCache();
-    await load();
-  }
+async function confirmRec(id) {
+  const res = await API.updateRecord(id, { status:'confirmed' });
+  if (res.success) { Toast.show('Confirmado!','success'); await load(); }
 }
 
-function editRecord(record_id) {
-  const { stageMap, ageMap, parishMap } = getMappers();
-  const r = allRecords.find(r => r.record_id === record_id);
-  if (!r) return;
-
-  const stageOpts = stages.map(s => `<option value="${s.stage_id}" ${r.stage_id===s.stage_id?'selected':''}>${s.stage_name}</option>`).join('');
-  const ageOpts   = ageGroups.map(a => `<option value="${a.age_id}" ${r.age_id===a.age_id?'selected':''}>${a.age_group}</option>`).join('');
-  const parishOpts = parishes.map(p => `<option value="${p.parish_id}" ${r.parish_id===p.parish_id?'selected':''}>${p.parish_name}</option>`).join('');
-
-  Utils.showModal('Editar Registo', `
+function editRec(id) {
+  const r = allRecords.find(r=>r.id===id); if (!r) return;
+  const pOpts  = parishes.map(p=>`<option value="${p.id}" ${r.parish_id===p.id?'selected':''}>${p.parish_name}</option>`).join('');
+  const sOpts  = stages.map(s=>`<option value="${s.id}" ${r.stage_id===s.id?'selected':''}>${s.stage_name}</option>`).join('');
+  const aOpts  = ageGroups.map(a=>`<option value="${a.id}" ${r.age_id===a.id?'selected':''}>${a.age_group}</option>`).join('');
+  Utils.showModal('Editar Registo',`
     <div class="form-grid">
-      <div class="form-group full">
-        <label>Paróquia <span class="req">*</span></label>
-        <select id="e_parish">${parishOpts}</select>
-      </div>
-      <div class="form-group">
-        <label>Etapa <span class="req">*</span></label>
-        <select id="e_stage">${stageOpts}</select>
-      </div>
-      <div class="form-group">
-        <label>Faixa etária <span class="req">*</span></label>
-        <select id="e_age">${ageOpts}</select>
-      </div>
-      <div class="form-group full">
-        <label>Livro <span class="req">*</span></label>
-        <input type="text" id="e_book" value="${r.book_name || ''}">
-      </div>
-      <div class="form-group">
-        <label>Autor</label>
-        <input type="text" id="e_author" value="${r.author || ''}">
-      </div>
-      <div class="form-group">
-        <label>Editora</label>
-        <input type="text" id="e_publisher" value="${r.publisher || ''}">
-      </div>
-      <div class="form-group">
-        <label>Ano</label>
-        <input type="number" id="e_year" value="${r.year || ''}">
-      </div>
-      <div class="form-group">
-        <label>Estado</label>
-        <select id="e_status">
-          <option value="draft"     ${r.status==='draft'?'selected':''}>Rascunho</option>
+      <div class="form-group full"><label>Paróquia</label><select id="e_p">${pOpts}</select></div>
+      <div class="form-group"><label>Etapa</label><select id="e_s">${sOpts}</select></div>
+      <div class="form-group"><label>Faixa etária</label><select id="e_a">${aOpts}</select></div>
+      <div class="form-group full"><label>Livro <span class="req">*</span></label><input type="text" id="e_b" value="${r.book_name||''}"></div>
+      <div class="form-group"><label>Autor</label><input type="text" id="e_au" value="${r.author||''}"></div>
+      <div class="form-group"><label>Editora</label><input type="text" id="e_pub" value="${r.publisher||''}"></div>
+      <div class="form-group"><label>Ano</label><input type="number" id="e_y" value="${r.year||''}"></div>
+      <div class="form-group"><label>Estado</label>
+        <select id="e_st">
+          <option value="draft" ${r.status==='draft'?'selected':''}>Rascunho</option>
           <option value="submitted" ${r.status==='submitted'?'selected':''}>Submetido</option>
           <option value="confirmed" ${r.status==='confirmed'?'selected':''}>Confirmado</option>
-        </select>
-      </div>
-      <div class="form-group full">
-        <label>Observações</label>
-        <textarea id="e_notes">${r.notes || ''}</textarea>
-      </div>
+        </select></div>
+      <div class="form-group full"><label>Observações</label><textarea id="e_n">${r.notes||''}</textarea></div>
     </div>`,
-    `<button class="btn btn-primary" onclick="saveEdit('${record_id}')">💾 Guardar</button>
-     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`
-  );
+    `<button class="btn btn-primary" onclick="saveRec('${id}')">💾 Guardar</button>
+     <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`);
 }
 
-async function saveEdit(record_id) {
-  const data = {
-    parish_id: document.getElementById('e_parish').value,
-    stage_id:  document.getElementById('e_stage').value,
-    age_id:    document.getElementById('e_age').value,
-    book_name: document.getElementById('e_book').value.trim(),
-    author:    document.getElementById('e_author').value.trim(),
-    publisher: document.getElementById('e_publisher').value.trim(),
-    year:      document.getElementById('e_year').value,
-    status:    document.getElementById('e_status').value,
-    notes:     document.getElementById('e_notes').value.trim(),
-  };
-  if (!data.book_name) { Toast.show('O nome do livro é obrigatório', 'error'); return; }
-  const result = await API.updateRecord(record_id, data);
-  if (result.success) {
-    Utils.closeModal();
-    Toast.show('Registo actualizado!', 'success');
-    API.clearCache();
-    await load();
-  }
+async function saveRec(id) {
+  const b = document.getElementById('e_b').value.trim();
+  if (!b) { Toast.show('Livro obrigatório','error'); return; }
+  const res = await API.updateRecord(id,{
+    parish_id:document.getElementById('e_p').value, stage_id:document.getElementById('e_s').value,
+    age_id:document.getElementById('e_a').value, book_name:b,
+    author:document.getElementById('e_au').value.trim(), publisher:document.getElementById('e_pub').value.trim(),
+    year:document.getElementById('e_y').value, status:document.getElementById('e_st').value,
+    notes:document.getElementById('e_n').value.trim(),
+  });
+  if (res.success) { Utils.closeModal(); Toast.show('Guardado!','success'); await load(); }
 }
 
-function deleteRecord(record_id) {
-  Utils.confirmAction('Eliminar este registo definitivamente?', async () => {
-    const result = await API.deleteRecord(record_id);
-    if (result.success) {
-      Toast.show('Eliminado!', 'success');
-      API.clearCache();
-      await load();
-    }
+function deleteRec(id) {
+  Utils.confirmAction('Eliminar este registo?', async ()=>{
+    const res=await API.deleteRecord(id);
+    if (res.success) { Toast.show('Eliminado!','success'); await load(); }
   });
 }
 
-function getExportData() {
-  const { parishMap, stageMap, ageMap } = getMappers();
-  return allRecords.map(r => ({
-    'Paróquia':      parishMap[r.parish_id] || r.parish_id,
-    'Etapa':         stageMap[r.stage_id]   || r.stage_id,
-    'Faixa Etária':  ageMap[r.age_id]       || r.age_id,
-    'Livro':         r.book_name,
-    'Autor':         r.author,
-    'Editora':       r.publisher,
-    'Ano':           r.year,
-    'Observações':   r.notes,
-    'Estado':        r.status,
-    'Data':          r.created_at,
-  }));
+function exportExcel() {
+  Utils.exportToExcel(allRecords.map(r=>({
+    'Paróquia':r.parish?.parish_name||'', 'Etapa':r.stage?.stage_name||'',
+    'Faixa etária':r.age?.age_group||'', 'Livro':r.book_name,
+    'Autor':r.author, 'Editora':r.publisher, 'Ano':r.year,
+    'Estado':r.status, 'Data':r.created_at,
+  })), 'registos_vigararia', 'Todos os Registos');
 }
-
-function exportExcel() { Utils.exportToExcel(getExportData(), 'registos_vigararia', 'Todos os Registos'); }
-function exportCSV()   { Utils.exportToCSV(getExportData(), 'registos_vigararia'); }
 
 load();
 </script>

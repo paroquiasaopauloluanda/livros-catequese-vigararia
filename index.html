@@ -8,14 +8,10 @@
 </head>
 <body>
 <div class="login-page">
-
-  <!-- Lado esquerdo — branding -->
   <div class="login-left">
     <div class="login-brand-icon">✝</div>
     <div class="login-brand-name">Sistema de Gestão<br>da Catequese</div>
-    <div class="login-brand-desc">
-      Plataforma da Vigararia para recolha, análise e uniformização dos livros de catequese nas paróquias.
-    </div>
+    <div class="login-brand-desc">Plataforma da Vigararia para recolha, análise e uniformização dos livros de catequese nas paróquias.</div>
     <div class="login-decoration">
       <div class="login-decoration-dot"></div>
       <div class="login-decoration-dot"></div>
@@ -23,67 +19,59 @@
     </div>
   </div>
 
-  <!-- Lado direito — formulário -->
   <div class="login-right">
     <div class="login-form-wrap">
       <h1 class="login-form-title">Bem-vindo</h1>
-      <p class="login-form-subtitle">Entra com as tuas credenciais para aceder ao sistema.</p>
+      <p class="login-form-subtitle">Entra com o teu email e senha para aceder ao sistema.</p>
 
       <div id="loginError" class="login-error"></div>
 
       <form id="loginForm" onsubmit="handleLogin(event)">
         <div class="login-form-group">
-          <label for="username">Utilizador</label>
-          <input type="text" id="username" placeholder="ex: sjose" required autocomplete="username">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="ex: coordenador@paroquia.ao" required autocomplete="email">
         </div>
         <div class="login-form-group">
           <label for="password">Senha</label>
           <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
         </div>
-        <button type="submit" id="loginBtn" class="btn btn-primary btn-lg" style="width:100%; margin-top:8px;">
+        <button type="submit" id="loginBtn" class="btn btn-primary btn-lg" style="width:100%;margin-top:8px;">
           Entrar
         </button>
       </form>
-
-      <!-- Dica de demonstração -->
-      <div class="demo-hint">
-        <strong>⚡ Modo demonstração</strong><br>
-        Admin: <strong>admin</strong> / <strong>admin123</strong><br>
-        Paróquia: <strong>sjose</strong> / <strong>123456</strong>
-      </div>
     </div>
   </div>
 </div>
 
 <script src="assets/js/config.js"></script>
 <script src="assets/js/utils.js"></script>
-<script src="assets/js/api.js"></script>
 <script src="assets/js/auth.js"></script>
 <script>
-  // Se já tem sessão activa, redireciona
+  // Redireciona se já tem sessão
   if (Auth.isAuthenticated()) {
-    const user = Auth.getCurrentUser();
-    window.location.href = user.role === 'admin' ? 'dashboard.html' : 'records.html';
+    const u = Auth.getCurrentUser();
+    location.href = u.role === 'admin' ? 'dashboard.html' : 'records.html';
   }
 
   async function handleLogin(e) {
     e.preventDefault();
-    const btn = document.getElementById('loginBtn');
     const errEl = document.getElementById('loginError');
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-
     errEl.style.display = 'none';
+
+    const btn = document.getElementById('loginBtn');
     btn.innerHTML = '<span class="spinner"></span> A verificar…';
     btn.disabled = true;
 
-    const result = await Auth.login(username, password);
+    const result = await Auth.login(
+      document.getElementById('email').value.trim(),
+      document.getElementById('password').value
+    );
 
     if (result.success) {
-      btn.innerHTML = '✓ Autenticado! A redirecionar…';
+      btn.innerHTML = '✓ Autenticado!';
       setTimeout(() => {
-        window.location.href = result.user.role === 'admin' ? 'dashboard.html' : 'records.html';
-      }, 500);
+        location.href = result.user.role === 'admin' ? 'dashboard.html' : 'records.html';
+      }, 400);
     } else {
       errEl.textContent = result.error;
       errEl.style.display = 'block';

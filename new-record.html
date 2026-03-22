@@ -1,337 +1,191 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Novo Registo — Catequese Vigararia</title>
   <link rel="stylesheet" href="assets/css/main.css">
   <style>
-    .wizard-steps {
-      display: flex;
-      gap: 0;
-      margin-bottom: 28px;
-      background: var(--surface-2);
-      border-radius: var(--radius-xl);
-      padding: 6px;
-      border: 1px solid var(--border);
-    }
-    .wizard-step {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-      padding: 12px 8px;
-      border-radius: var(--radius-lg);
-      transition: all .2s;
-      font-size: 13px;
-      color: var(--text-3);
-    }
-    .wizard-step.active   { background: var(--surface); box-shadow: var(--shadow-sm); color: var(--primary); font-weight: 600; }
-    .wizard-step.done     { color: var(--success); }
-    .wizard-step-num {
-      width: 28px; height: 28px;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 700;
-      background: var(--border); color: var(--text-3);
-    }
-    .wizard-step.active .wizard-step-num { background: var(--primary); color: #fff; }
-    .wizard-step.done  .wizard-step-num  { background: var(--success); color: #fff; }
-    .wizard-panel { display: none; }
-    .wizard-panel.active { display: block; animation: fadeUp .2s; }
-    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-    .book-suggestion {
-      padding: 10px 14px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      transition: all var(--transition);
-      font-size: 13.5px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .book-suggestion:hover { border-color: var(--primary-light); background: var(--primary-pale); }
-    .book-suggestion-books { display: grid; gap: 8px; margin-top: 10px; }
+    .wizard-steps{display:flex;gap:0;margin-bottom:24px;background:var(--surface-2);border-radius:var(--radius-xl);padding:6px;border:1px solid var(--border);}
+    .wizard-step{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px;border-radius:var(--radius-lg);transition:all .2s;font-size:13px;color:var(--text-3);}
+    .wizard-step.active{background:var(--surface);box-shadow:var(--shadow-sm);color:var(--primary);font-weight:600;}
+    .wizard-step.done{color:var(--success);}
+    .wizard-step-num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;background:var(--border);color:var(--text-3);}
+    .wizard-step.active .wizard-step-num{background:var(--primary);color:#fff;}
+    .wizard-step.done  .wizard-step-num{background:var(--success);color:#fff;}
+    .wizard-panel{display:none;} .wizard-panel.active{display:block;animation:fadeUp .2s;}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .book-suggestion{padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;transition:all .15s;font-size:13.5px;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+    .book-suggestion:hover{border-color:var(--primary-light);background:var(--primary-pale);}
   </style>
 </head>
 <body>
-<div class="app-layout">
-  <div class="main-content">
-
-    <header class="page-header">
-      <div>
-        <div class="page-title">Novo Registo</div>
-        <div class="page-subtitle">Regista um livro utilizado na tua paróquia</div>
+<div class="app-layout"><div class="main-content">
+  <header class="page-header">
+    <div><div class="page-title">Novo Registo</div></div>
+    <div class="header-actions"><a href="records.html" class="btn btn-secondary btn-sm">← Voltar</a></div>
+  </header>
+  <main class="page-body">
+    <div style="max-width:680px;margin:0 auto;">
+      <div class="wizard-steps">
+        <div class="wizard-step active" id="tab1"><div class="wizard-step-num">1</div><span>Contexto</span></div>
+        <div class="wizard-step" id="tab2"><div class="wizard-step-num">2</div><span>Livro</span></div>
+        <div class="wizard-step" id="tab3"><div class="wizard-step-num">3</div><span>Confirmar</span></div>
       </div>
-      <div class="header-actions">
-        <a href="records.html" class="btn btn-secondary btn-sm">← Voltar</a>
-      </div>
-    </header>
+      <div class="card"><div class="card-body">
 
-    <main class="page-body">
-      <div style="max-width: 680px; margin: 0 auto;">
-
-        <!-- Steps -->
-        <div class="wizard-steps" id="wizardSteps">
-          <div class="wizard-step active" id="step1_tab">
-            <div class="wizard-step-num">1</div>
-            <span>Contexto</span>
+        <!-- Passo 1 -->
+        <div class="wizard-panel active" id="p1">
+          <h3 style="font-family:var(--font-serif);font-size:17px;margin-bottom:16px;">Contexto do registo</h3>
+          <div class="form-grid">
+            <div class="form-group full"><label>Paróquia</label>
+              <input id="parishDisplay" type="text" readonly style="background:var(--surface-2)"></div>
+            <div class="form-group"><label>Etapa <span class="req">*</span></label>
+              <select id="stage_id"><option value="">— Seleccionar —</option></select></div>
+            <div class="form-group"><label>Faixa etária <span class="req">*</span></label>
+              <select id="age_id"><option value="">— Seleccionar —</option></select></div>
           </div>
-          <div class="wizard-step" id="step2_tab">
-            <div class="wizard-step-num">2</div>
-            <span>Livro</span>
-          </div>
-          <div class="wizard-step" id="step3_tab">
-            <div class="wizard-step-num">3</div>
-            <span>Detalhes</span>
+          <div class="form-actions" style="margin-top:20px;">
+            <button class="btn btn-primary" onclick="goNext(1)">Continuar →</button>
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-body">
-
-            <!-- Passo 1: Contexto -->
-            <div class="wizard-panel active" id="panel1">
-              <h3 style="font-family:var(--font-serif);font-size:17px;margin-bottom:6px;">Contexto do registo</h3>
-              <p style="font-size:13.5px;color:var(--text-3);margin-bottom:20px;">Selecciona a etapa e a faixa etária dos catecúmenos.</p>
-
-              <div class="form-grid">
-                <div class="form-group full">
-                  <label>Paróquia</label>
-                  <input type="text" id="parishDisplay" readonly style="background:var(--surface-2);cursor:default;">
-                </div>
-                <div class="form-group">
-                  <label>Etapa da catequese <span class="req">*</span></label>
-                  <select id="stage_id">
-                    <option value="">— Seleccionar —</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label>Faixa etária <span class="req">*</span></label>
-                  <select id="age_id">
-                    <option value="">— Seleccionar —</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="form-actions" style="margin-top:24px;">
-                <button class="btn btn-primary" onclick="nextStep(1)">Continuar →</button>
-              </div>
-            </div>
-
-            <!-- Passo 2: Livro -->
-            <div class="wizard-panel" id="panel2">
-              <h3 style="font-family:var(--font-serif);font-size:17px;margin-bottom:6px;">Livro utilizado</h3>
-              <p style="font-size:13.5px;color:var(--text-3);margin-bottom:20px;">Indica o nome do livro. Podes seleccionar uma sugestão ou escrever livremente.</p>
-
-              <div id="bookSuggestions"></div>
-
-              <div class="form-group" style="margin-top:16px;">
-                <label>Nome do livro <span class="req">*</span></label>
-                <input type="text" id="book_name" placeholder="ex: Caminho da Fé" autocomplete="off">
-              </div>
-
-              <div class="form-grid" style="margin-top:16px;">
-                <div class="form-group">
-                  <label>Autor</label>
-                  <input type="text" id="author" placeholder="ex: CNBB">
-                </div>
-                <div class="form-group">
-                  <label>Editora</label>
-                  <input type="text" id="publisher" placeholder="ex: Paulus">
-                </div>
-                <div class="form-group">
-                  <label>Ano de edição</label>
-                  <input type="number" id="year" placeholder="ex: 2020" min="1900" max="2099">
-                </div>
-              </div>
-
-              <div class="form-actions" style="margin-top:24px;">
-                <button class="btn btn-primary" onclick="nextStep(2)">Continuar →</button>
-                <button class="btn btn-secondary" onclick="prevStep(2)">← Voltar</button>
-              </div>
-            </div>
-
-            <!-- Passo 3: Detalhes e confirmação -->
-            <div class="wizard-panel" id="panel3">
-              <h3 style="font-family:var(--font-serif);font-size:17px;margin-bottom:6px;">Revisão e envio</h3>
-              <p style="font-size:13.5px;color:var(--text-3);margin-bottom:20px;">Confirma os dados antes de submeter o registo.</p>
-
-              <div id="reviewBox" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;"></div>
-
-              <div class="form-group">
-                <label>Observações (opcional)</label>
-                <textarea id="notes" placeholder="ex: Este livro é usado há 3 anos. Adequado para o grupo de crianças."></textarea>
-              </div>
-
-              <div id="submitError" class="alert alert-danger" style="display:none;"></div>
-
-              <div class="form-actions" style="margin-top:24px;">
-                <button class="btn btn-success" id="submitBtn" onclick="submitRecord()">✓ Submeter registo</button>
-                <button class="btn btn-secondary" onclick="prevStep(3)">← Voltar</button>
-              </div>
-            </div>
-
+        <!-- Passo 2 -->
+        <div class="wizard-panel" id="p2">
+          <h3 style="font-family:var(--font-serif);font-size:17px;margin-bottom:8px;">Livro utilizado</h3>
+          <p style="font-size:13px;color:var(--text-3);margin-bottom:16px;">Selecciona uma sugestão ou escreve o nome livremente.</p>
+          <div id="suggestions"></div>
+          <div class="form-group"><label>Nome do livro <span class="req">*</span></label>
+            <input type="text" id="book_name" placeholder="ex: Caminho da Fé"></div>
+          <div class="form-grid" style="margin-top:14px;">
+            <div class="form-group"><label>Autor</label><input type="text" id="author"></div>
+            <div class="form-group"><label>Editora</label><input type="text" id="publisher"></div>
+            <div class="form-group"><label>Ano</label><input type="number" id="year" min="1900" max="2099"></div>
+          </div>
+          <div class="form-actions" style="margin-top:20px;">
+            <button class="btn btn-primary" onclick="goNext(2)">Continuar →</button>
+            <button class="btn btn-secondary" onclick="goTo(1)">← Voltar</button>
           </div>
         </div>
-      </div>
-    </main>
-  </div>
-</div>
+
+        <!-- Passo 3 -->
+        <div class="wizard-panel" id="p3">
+          <h3 style="font-family:var(--font-serif);font-size:17px;margin-bottom:16px;">Confirmar e submeter</h3>
+          <div id="review" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:18px;"></div>
+          <div class="form-group">
+            <label>Observações (opcional)</label>
+            <textarea id="notes" placeholder="Notas sobre este livro…"></textarea>
+          </div>
+          <div id="submitErr" class="alert alert-danger" style="display:none;"></div>
+          <div class="form-actions" style="margin-top:20px;">
+            <button class="btn btn-success" id="submitBtn" onclick="submit()">✓ Submeter</button>
+            <button class="btn btn-secondary" onclick="goTo(2)">← Voltar</button>
+          </div>
+        </div>
+
+      </div></div>
+    </div>
+  </main>
+</div></div>
 
 <script src="assets/js/config.js"></script>
 <script src="assets/js/utils.js"></script>
-<script src="assets/js/api.js"></script>
 <script src="assets/js/auth.js"></script>
+<script src="assets/js/api.js"></script>
 <script src="assets/js/layout.js"></script>
 <script>
 Layout.render('new-record');
-
 const user = Auth.getCurrentUser();
-let stages    = [];
-let ageGroups = [];
-let books     = [];
-let parishes  = [];
+let stages=[], ageGroups=[], books=[], parishes=[];
 
 async function init() {
   [stages, ageGroups, books, parishes] = await Promise.all([
-    API.fetchSheet(CONFIG.SHEETS.STAGES),
-    API.fetchSheet(CONFIG.SHEETS.AGE_GROUPS),
-    API.getBooks(),
-    API.getParishes(),
+    API.getStages(), API.getAgeGroups(), API.getBooks(), API.getParishes()
   ]);
+  const myParish = parishes.find(p=>p.id===user.parish_id);
+  document.getElementById('parishDisplay').value = myParish?.parish_name || user.parish_id || '—';
 
-  // Paróquia do utilizador
-  const myParish = parishes.find(p => p.parish_id === user.parish_id);
-  document.getElementById('parishDisplay').value = myParish ? myParish.parish_name : user.parish_id;
-
-  // Popula selects
-  const stageEl = document.getElementById('stage_id');
-  const ageEl   = document.getElementById('age_id');
-
-  // Agrupa etapas por categoria
-  const cats = [...new Set(stages.map(s => s.category))];
+  const sel = document.getElementById('stage_id');
+  const cats = [...new Set(stages.map(s=>s.category))];
   cats.forEach(cat => {
-    const group = document.createElement('optgroup');
-    group.label = cat;
-    stages.filter(s => s.category === cat).forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s.stage_id;
-      opt.textContent = s.stage_name;
-      group.appendChild(opt);
+    const g = document.createElement('optgroup'); g.label = cat;
+    stages.filter(s=>s.category===cat).forEach(s => {
+      const o = document.createElement('option'); o.value=s.id; o.textContent=s.stage_name; g.appendChild(o);
     });
-    stageEl.appendChild(group);
+    sel.appendChild(g);
   });
-
   ageGroups.forEach(a => {
-    const opt = document.createElement('option');
-    opt.value = a.age_id;
-    opt.textContent = `${a.age_group} (${a.description})`;
-    ageEl.appendChild(opt);
+    const o = document.createElement('option'); o.value=a.id; o.textContent=`${a.age_group} (${a.description})`;
+    document.getElementById('age_id').appendChild(o);
   });
-
-  // Sugestões ao mudar etapa
-  stageEl.addEventListener('change', showBookSuggestions);
+  document.getElementById('stage_id').addEventListener('change', showSuggestions);
 }
 
-function showBookSuggestions() {
-  const stageId   = document.getElementById('stage_id').value;
-  const stage     = stages.find(s => s.stage_id === stageId);
-  const stageName = stage ? stage.stage_name : '';
-
-  const relevant = books.filter(b =>
-    b.recommended_stage && b.recommended_stage.includes(stageName.split(' ')[1] || stageName)
-  );
-
-  const container = document.getElementById('bookSuggestions');
-  if (!relevant.length) { container.innerHTML = ''; return; }
-
-  container.innerHTML = `
-    <div style="font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">
-      📚 Sugestões para ${stageName}
-    </div>
-    <div class="book-suggestion-books">
-      ${relevant.map(b => `
-        <div class="book-suggestion" onclick="fillBook(${JSON.stringify(b).replace(/"/g,'&quot;')})">
-          <div>
-            <strong style="font-size:14px;">${b.book_name}</strong>
-            <div style="font-size:12px;color:var(--text-3);">${b.author} · ${b.publisher} · ${b.year}</div>
-          </div>
-          <span style="font-size:12px;color:var(--primary-light);">Usar →</span>
-        </div>`).join('')}
-    </div>
-    <div style="font-size:12px;color:var(--text-3);margin:10px 0 4px;">Ou escreve livremente:</div>`;
+function showSuggestions() {
+  const sid = document.getElementById('stage_id').value;
+  const stage = stages.find(s=>s.id===sid);
+  if (!stage) { document.getElementById('suggestions').innerHTML=''; return; }
+  const rel = books.filter(b => b.recommended_stage && b.recommended_stage.includes(stage.stage_name.replace(/[º°]/g,'').trim()));
+  if (!rel.length) { document.getElementById('suggestions').innerHTML=''; return; }
+  document.getElementById('suggestions').innerHTML =
+    `<p style="font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">📚 Sugestões</p>` +
+    rel.map(b=>`<div class="book-suggestion" onclick='fillBook(${JSON.stringify(b)})'>
+      <div><strong>${b.book_name}</strong><div style="font-size:12px;color:var(--text-3)">${b.author||''} · ${b.publisher||''} · ${b.year||''}</div></div>
+      <span style="font-size:12px;color:var(--primary-light)">Usar →</span></div>`).join('') +
+    `<p style="font-size:12px;color:var(--text-3);margin:10px 0 8px;">Ou escreve livremente:</p>`;
 }
 
-function fillBook(book) {
-  document.getElementById('book_name').value  = book.book_name  || '';
-  document.getElementById('author').value     = book.author     || '';
-  document.getElementById('publisher').value  = book.publisher  || '';
-  document.getElementById('year').value       = book.year       || '';
+function fillBook(b) {
+  document.getElementById('book_name').value  = b.book_name||'';
+  document.getElementById('author').value     = b.author||'';
+  document.getElementById('publisher').value  = b.publisher||'';
+  document.getElementById('year').value       = b.year||'';
 }
 
-function nextStep(from) {
-  if (from === 1) {
-    if (!document.getElementById('stage_id').value) { Toast.show('Selecciona a etapa', 'error'); return; }
-    if (!document.getElementById('age_id').value)   { Toast.show('Selecciona a faixa etária', 'error'); return; }
-    goToStep(2);
-  } else if (from === 2) {
-    if (!document.getElementById('book_name').value.trim()) { Toast.show('Indica o nome do livro', 'error'); return; }
-    buildReview();
-    goToStep(3);
+function goTo(n) {
+  for (let i=1;i<=3;i++) {
+    document.getElementById(`p${i}`).classList.toggle('active', i===n);
+    const t = document.getElementById(`tab${i}`);
+    t.classList.remove('active','done');
+    if (i===n) t.classList.add('active'); else if (i<n) t.classList.add('done');
   }
 }
 
-function prevStep(from) {
-  goToStep(from - 1);
-}
-
-function goToStep(n) {
-  for (let i = 1; i <= 3; i++) {
-    document.getElementById(`panel${i}`).classList.toggle('active', i === n);
-    const tab = document.getElementById(`step${i}_tab`);
-    tab.classList.remove('active','done');
-    if (i === n) tab.classList.add('active');
-    else if (i < n) tab.classList.add('done');
+function goNext(from) {
+  if (from===1) {
+    if (!document.getElementById('stage_id').value) { Toast.show('Selecciona a etapa','error'); return; }
+    if (!document.getElementById('age_id').value)   { Toast.show('Selecciona a faixa etária','error'); return; }
+    goTo(2);
+  } else if (from===2) {
+    if (!document.getElementById('book_name').value.trim()) { Toast.show('Indica o nome do livro','error'); return; }
+    buildReview(); goTo(3);
   }
 }
 
 function buildReview() {
-  const stageId  = document.getElementById('stage_id').value;
-  const ageId    = document.getElementById('age_id').value;
-  const stageName = (stages.find(s => s.stage_id === stageId) || {}).stage_name || stageId;
-  const ageName   = (ageGroups.find(a => a.age_id   === ageId)  || {}).age_group  || ageId;
-  const myParish = (parishes.find(p => p.parish_id === user.parish_id) || {}).parish_name || user.parish_id;
-
+  const sid = document.getElementById('stage_id').value;
+  const aid = document.getElementById('age_id').value;
+  const myParish = parishes.find(p=>p.id===user.parish_id);
   const rows = [
-    ['Paróquia',       myParish],
-    ['Etapa',          stageName],
-    ['Faixa etária',   ageName],
-    ['Livro',          document.getElementById('book_name').value],
-    ['Autor',          document.getElementById('author').value || '—'],
-    ['Editora',        document.getElementById('publisher').value || '—'],
-    ['Ano',            document.getElementById('year').value || '—'],
+    ['Paróquia',     myParish?.parish_name||'—'],
+    ['Etapa',        stages.find(s=>s.id===sid)?.stage_name||'—'],
+    ['Faixa etária', ageGroups.find(a=>a.id===aid)?.age_group||'—'],
+    ['Livro',        document.getElementById('book_name').value],
+    ['Autor',        document.getElementById('author').value||'—'],
+    ['Editora',      document.getElementById('publisher').value||'—'],
+    ['Ano',          document.getElementById('year').value||'—'],
   ];
-
-  document.getElementById('reviewBox').innerHTML = `
-    <table style="width:100%;font-size:13.5px;border-collapse:collapse;">
-      ${rows.map(([label, val]) => `
-        <tr>
-          <td style="padding:7px 0;color:var(--text-3);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em;width:35%;border-bottom:1px solid var(--border);">${label}</td>
-          <td style="padding:7px 0;border-bottom:1px solid var(--border);font-weight:${label==='Livro'?'600':'400'};">${val}</td>
-        </tr>`).join('')}
-    </table>`;
+  document.getElementById('review').innerHTML = `<table style="width:100%;font-size:13.5px;border-collapse:collapse;">
+    ${rows.map(([l,v])=>`<tr>
+      <td style="padding:7px 0;color:var(--text-3);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;width:35%;border-bottom:1px solid var(--border)">${l}</td>
+      <td style="padding:7px 0;border-bottom:1px solid var(--border);font-weight:${l==='Livro'?600:400}">${v}</td>
+    </tr>`).join('')}
+  </table>`;
 }
 
-async function submitRecord() {
-  const btn = document.getElementById('submitBtn');
+async function submit() {
   Utils.setLoading('submitBtn', true, 'A submeter…');
-  document.getElementById('submitError').style.display = 'none';
-
-  const data = {
+  document.getElementById('submitErr').style.display='none';
+  const res = await API.createRecord({
     parish_id: user.parish_id,
     stage_id:  document.getElementById('stage_id').value,
     age_id:    document.getElementById('age_id').value,
@@ -340,17 +194,14 @@ async function submitRecord() {
     publisher: document.getElementById('publisher').value.trim(),
     year:      document.getElementById('year').value,
     notes:     document.getElementById('notes').value.trim(),
-  };
-
-  const result = await API.createRecord(data);
-
-  if (result.success) {
-    Toast.show('Registo submetido com sucesso!', 'success');
-    setTimeout(() => { window.location.href = 'records.html'; }, 1200);
+  });
+  if (res.success) {
+    Toast.show('Registo submetido!','success');
+    setTimeout(()=>{ location.href='records.html'; }, 900);
   } else {
-    document.getElementById('submitError').textContent = result.error || 'Erro ao submeter';
-    document.getElementById('submitError').style.display = 'flex';
-    Utils.setLoading('submitBtn', false, '✓ Submeter registo');
+    document.getElementById('submitErr').textContent = res.error||'Erro ao submeter';
+    document.getElementById('submitErr').style.display='flex';
+    Utils.setLoading('submitBtn', false, '✓ Submeter');
   }
 }
 
