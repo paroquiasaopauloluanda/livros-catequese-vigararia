@@ -1,96 +1,181 @@
 /**
- * auth.js — Autenticação e sessão
+ * auth.js — Autenticação via Supabase Auth
+ * Usa email + password com JWT tokens
  */
 const Auth = (() => {
-  const SESSION_KEY = 'cvs_session';
-  const TIMEOUT_KEY = 'cvs_session_exp';
-  let _currentUser = null;
+  const SESSION_KEY = 'cvs_sb_session';
+  let _session = null;
+  let _profile  = null;
 
-  function _save(user) {
-    const expiry = Date.now() + CONFIG.SESSION_TIMEOUT * 60 * 1000;
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
-    sessionStorage.setItem(TIMEOUT_KEY, expiry.toString());
-    _currentUser = user;
+  // ─── Persistência de sessão ───────────────────────────────────────────────
+  function _saveSession(session, profile) {
+    _session = session;
+    _profile  = profile;
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ session, profile }));
   }
 
-  function _clear() {
-    sessionStorage.removeItem(SESSION_KEY);
-    sessionStorage.removeItem(TIMEOUT_KEY);
-    _currentUser = null;
+  function _clearSession() {
+    _session = null;
+    _profile  = null;
+    localStorage.removeItem(SESSION_KEY);
   }
 
-  async function login(username, password) {
+  function _loadSession() {
+    if (_session) return true;
     try {
-      // Usa _getUsersRaw para ter acesso às passwords reais
-      const users = await API._getUsersRaw();
-      console.log('[Auth] Utilizadores carregados:', users.length);
+      const stored = localStorage.getItem(SESSION_KEY);
+      if (!stored) return false;
+      const { session, profile } = JSON.parse(stored);
+      // Verifica expiração do JWT
+      if (!session || !session.expires_at) return false;
+      if (Date.now() / 1000 > session.expires_at) {
+        _clearSession();
+        return false;
+      }
+      _session = session;
+      _profile  = profile;
+      return true;
+    } catch { return false; }
+  }
 
-      const user = users.find(u =>
-        u.username && u.password &&
-        u.username.toString().trim().toLowerCase() === username.trim().toLowerCase() &&
-        u.password.toString().trim() === password.trim()
-      );
+  // ─── Chamada directa à API Supabase Auth ──────────────────────────────────
+  async function _authRequest(endpoint, body) {
+    const resp = await fetch(`${CONFIG.SUPABASE_URL}/auth/v1/${endpoint}`, {
+      method:  'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey':       CONFIG.SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error_description || data.msg || `Auth error: ${resp.status}`);
+    return data;
+  }
 
-      if (!user) return { success: false, error: 'Credenciais inválidas. Verifica o utilizador e a senha.' };
-      if (user.status && user.status.toString().trim() !== 'active') {
+  // ─── Busca o perfil do utilizador ─────────────────────────────────────────
+  async function _fetchProfile(userId, accessToken) {
+    const resp = await fetch(
+      `${CONFIG.SUPABASE_URL}/rest/v1/user_profiles?id=eq.${userId}&select=*,parish:parishes(id,parish_name)`,
+      {
+        headers: {
+          'apikey':        CONFIG.SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }
+    );
+    if (!resp.ok) throw new Error('Não foi possível carregar o perfil do utilizador');
+    const rows = await resp.json();
+    if (!rows.length) throw new Error('Perfil não encontrado. Contacta o administrador.');
+    return rows[0];
+  }
+
+  // ─── API pública ──────────────────────────────────────────────────────────
+  async function login(email, password) {
+    try {
+      const data = await _authRequest('token?grant_type=password', { email, password });
+      const profile = await _fetchProfile(data.user.id, data.access_token);
+
+      if (profile.status !== 'active') {
         return { success: false, error: 'Conta inactiva. Contacta o administrador.' };
       }
 
-      const sessionUser = {
-        user_id:      user.user_id,
-        username:     user.username,
-        role:         user.role,
-        parish_id:    user.parish_id,
-        display_name: user.display_name || user.username,
-      };
-      _save(sessionUser);
-      return { success: true, user: sessionUser };
+      _saveSession({
+        access_token:  data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at:    data.expires_at || (Math.floor(Date.now()/1000) + data.expires_in),
+        user_id:       data.user.id,
+        email:         data.user.email,
+      }, profile);
 
+      return { success: true, user: profile };
     } catch (err) {
-      console.error('[Auth] Erro no login:', err);
-      return { success: false, error: 'Erro ao aceder à base de dados. Verifica a ligação.' };
+      console.error('[Auth] Login error:', err.message);
+      const msg = err.message.includes('Invalid login') || err.message.includes('invalid')
+        ? 'Email ou senha incorrectos.'
+        : err.message;
+      return { success: false, error: msg };
     }
   }
 
-  function logout() {
-    _clear();
+  async function logout() {
+    try {
+      if (_session?.access_token) {
+        await fetch(`${CONFIG.SUPABASE_URL}/auth/v1/logout`, {
+          method:  'POST',
+          headers: {
+            'apikey':        CONFIG.SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${_session.access_token}`,
+          },
+        });
+      }
+    } catch(e) {}
+    _clearSession();
     window.location.href = 'index.html';
   }
 
-  function getCurrentUser() {
-    if (_currentUser) return _currentUser;
-    const stored = sessionStorage.getItem(SESSION_KEY);
-    const expiry  = sessionStorage.getItem(TIMEOUT_KEY);
-    if (stored && expiry && Date.now() < parseInt(expiry, 10)) {
-      _currentUser = JSON.parse(stored);
-      return _currentUser;
+  // ─── Refresh automático do token ──────────────────────────────────────────
+  async function _refreshIfNeeded() {
+    if (!_session) return false;
+    const expiresIn = _session.expires_at - Math.floor(Date.now() / 1000);
+    if (expiresIn > 300) return true; // ainda válido por mais de 5 min
+
+    try {
+      const data = await _authRequest('token?grant_type=refresh_token', {
+        refresh_token: _session.refresh_token,
+      });
+      const profile = await _fetchProfile(data.user.id, data.access_token);
+      _saveSession({
+        ..._session,
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: Math.floor(Date.now()/1000) + data.expires_in,
+      }, profile);
+      return true;
+    } catch(e) {
+      console.warn('[Auth] Refresh falhou:', e.message);
+      _clearSession();
+      return false;
     }
-    _clear();
-    return null;
   }
 
-  function isAuthenticated()           { return getCurrentUser() !== null; }
-  function isAdmin()                   { const u = getCurrentUser(); return u && u.role === CONFIG.ROLES.ADMIN; }
-  function canAccessParish(parish_id)  {
+  function getAccessToken() {
+    _loadSession();
+    return _session?.access_token || CONFIG.SUPABASE_ANON_KEY;
+  }
+
+  function getCurrentUser() {
+    _loadSession();
+    return _profile || null;
+  }
+
+  function isAuthenticated() {
+    return _loadSession();
+  }
+
+  function isAdmin() {
     const u = getCurrentUser();
-    return u && (u.role === CONFIG.ROLES.ADMIN || u.parish_id === parish_id);
+    return u && u.role === CONFIG.ROLES.ADMIN;
+  }
+
+  function canAccessParish(parish_id) {
+    const u = getCurrentUser();
+    if (!u) return false;
+    if (u.role === CONFIG.ROLES.ADMIN) return true;
+    return u.parish_id === parish_id;
   }
 
   function requireAuth(requiredRole = null) {
-    const user = getCurrentUser();
-    if (!user) { window.location.href = 'index.html'; return false; }
-    if (requiredRole && user.role !== requiredRole && user.role !== CONFIG.ROLES.ADMIN) {
+    if (!isAuthenticated()) { window.location.href = 'index.html'; return false; }
+    const u = getCurrentUser();
+    if (requiredRole && u.role !== requiredRole && u.role !== CONFIG.ROLES.ADMIN) {
       window.location.href = 'index.html'; return false;
     }
     return true;
   }
 
-  // Renova sessão ao interagir
-  document.addEventListener('click', () => {
-    if (isAuthenticated()) {
-      sessionStorage.setItem(TIMEOUT_KEY, (Date.now() + CONFIG.SESSION_TIMEOUT * 60 * 1000).toString());
-    }
-  });
+  // Refresh automático a cada 4 minutos
+  setInterval(_refreshIfNeeded, 4 * 60 * 1000);
 
-  return { login, logout, getCurrentUser, isAuthenticated, isAdmin, canAccessParish, requireAuth };
+  return { login, logout, getAccessToken, getCurrentUser, isAuthenticated, isAdmin, canAccessParish, requireAuth };
 })();
