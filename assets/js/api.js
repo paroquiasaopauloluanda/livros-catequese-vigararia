@@ -30,10 +30,17 @@ const API = (() => {
   }
 
   async function _delete(table, id) {
-    const resp = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
-      method:'DELETE', headers:_headers()
-    });
-    if (!resp.ok) { const e = await resp.json().catch(()=>({})); throw new Error(e.message||`DELETE ${table}: ${resp.status}`); }
+    console.log(`[API] DELETE ${table} id=`, id, typeof id);
+    if (!id || String(id).trim() === '') {
+      throw new Error('ID inválido ou vazio — não é possível eliminar');
+    }
+    const url = `${CONFIG.SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`;
+    const resp = await fetch(url, { method:'DELETE', headers:_headers() });
+    if (!resp.ok) {
+      const e = await resp.json().catch(()=>({}));
+      console.error('[API] DELETE erro:', e);
+      throw new Error(e.message || e.hint || `DELETE ${table}: ${resp.status}`);
+    }
     return { success: true };
   }
 
