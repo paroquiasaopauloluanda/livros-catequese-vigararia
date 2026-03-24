@@ -236,12 +236,24 @@ const Utils = (() => {
   }
 
   // ─── Confirmação ──────────────────────────────────────────────────────────
+  // Guarda o callback num registry — nunca serializa funções para HTML
+  let _pendingConfirm = null;
+
   function confirmAction(message, onConfirm) {
+    _pendingConfirm = onConfirm;
     showModal('Confirmar acção',
-      `<p style="margin:0;font-size:15px;">${message}</p>`,
-      `<button class="btn btn-danger" onclick="(${onConfirm.toString()})(); Utils.closeModal()">Confirmar</button>
+      `<p style="margin:0;font-size:14px;">${message}</p>`,
+      `<button class="btn btn-danger" onclick="Utils._runConfirm()">Confirmar</button>
        <button class="btn btn-secondary" onclick="Utils.closeModal()">Cancelar</button>`
     );
+  }
+
+  async function _runConfirm() {
+    closeModal();
+    if (typeof _pendingConfirm === 'function') {
+      await _pendingConfirm();
+      _pendingConfirm = null;
+    }
   }
 
   // ─── Estatísticas ─────────────────────────────────────────────────────────
@@ -295,7 +307,7 @@ const Utils = (() => {
     el, qs, qsa, setHTML, showEl, hideEl, setLoading,
     buildTable, _filterTable,
     statusBadge,
-    showModal, closeModal, confirmAction,
+    showModal, closeModal, confirmAction, _runConfirm,
     computeStats,
   };
 })();
