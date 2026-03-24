@@ -100,10 +100,15 @@ const Utils = (() => {
   }
 
   // ─── Tabela dinâmica ─────────────────────────────────────────────────────
-  // Usa data-attributes para passar IDs — evita problemas de escaping no onclick
+  // Armazena IDs num registry global para evitar qualquer problema de escaping HTML
+  const _tableRegistry = {};
+
   function buildTable(containerId, columns, data, actions = []) {
     const container = el(containerId);
     if (!container) return;
+
+    // Guarda os dados no registry para acesso posterior pelos botões
+    _tableRegistry[containerId] = data;
 
     if (!data.length) {
       container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Sem registos encontrados.</p></div>';
@@ -113,14 +118,16 @@ const Utils = (() => {
     const thead = columns.map(c => `<th>${c.label}</th>`).join('');
     const tbody = data.map((row, rowIdx) => {
       const cells = columns.map(c => {
-        const val = c.render ? c.render(row[c.key], row) : (row[c.key] !== undefined && row[c.key] !== null && row[c.key] !== '' ? row[c.key] : '—');
+        const val = c.render
+          ? c.render(row[c.key], row)
+          : (row[c.key] !== undefined && row[c.key] !== null && row[c.key] !== '' ? row[c.key] : '—');
         return `<td>${val}</td>`;
       }).join('');
 
-      // Usa data-row-index para referenciar a linha — evita qualquer problema de escaping de UUIDs
-      const btns = actions.map(a => {
-        return `<button class="btn-action btn-${a.type}" data-row="${rowIdx}" data-fn="${a.fn}" data-idkey="${a.idKey||'id'}">${a.label}</button>`;
-      }).join(' ');
+      // Guarda apenas o índice numérico no botão — sem UUIDs no HTML
+      const btns = actions.map(a =>
+        `<button class="btn-action btn-${a.type}" data-tbl="${containerId}" data-row="${rowIdx}" data-fn="${a.fn}" data-idkey="${a.idKey||'id'}">${a.label}</button>`
+      ).join(' ');
 
       return `<tr>${cells}${actions.length ? `<td class="actions-cell">${btns}</td>` : ''}</tr>`;
     }).join('');
@@ -140,19 +147,25 @@ const Utils = (() => {
       </div>
     `;
 
-    // Adiciona event listeners depois de injectar o HTML
-    // Lê o ID do objecto data[] directamente — sem escaping
+    // Event listeners: lê ID do registry em memória — UUID nunca toca em HTML
     container.querySelectorAll('.btn-action[data-fn]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const rowIdx = parseInt(btn.dataset.row, 10);
-        const idKey  = btn.dataset.idkey || 'id';
-        const fnName = btn.dataset.fn;
-        const row    = data[rowIdx];
-        const idVal  = row ? row[idKey] : null;
+      btn.addEventListener('click', function() {
+        const tbl    = this.dataset.tbl;
+        const rowIdx = parseInt(this.dataset.row, 10);
+        const idKey  = this.dataset.idkey || 'id';
+        const fnName = this.dataset.fn;
+
+        const tableData = _tableRegistry[tbl];
+        if (!tableData) { console.error('[Table] Registry não encontrado para:', tbl); return; }
+
+        const row   = tableData[rowIdx];
+        const idVal = row ? row[idKey] : null;
+
+        console.log('[Table] Acção:', fnName, '| idKey:', idKey, '| id:', idVal, '| row:', row);
 
         if (!idVal) {
-          console.error('[buildTable] ID não encontrado:', { idKey, row, rowIdx });
-          Toast.show('Erro: ID do registo não encontrado', 'error');
+          console.error('[Table] ID vazio! row:', row, 'idKey:', idKey);
+          Toast.show('Erro interno: ID não encontrado', 'error');
           return;
         }
 
@@ -160,7 +173,7 @@ const Utils = (() => {
         if (typeof fn === 'function') {
           fn(idVal);
         } else {
-          console.error('[buildTable] Função não encontrada:', fnName);
+          console.error('[Table] Função não encontrada no window:', fnName);
         }
       });
     });
