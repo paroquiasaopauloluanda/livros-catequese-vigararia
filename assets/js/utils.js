@@ -99,7 +99,8 @@ const Utils = (() => {
     }
   }
 
-  // ─── Tabela dinâmica simples ───────────────────────────────────────────────
+  // ─── Tabela dinâmica ─────────────────────────────────────────────────────
+  // Usa data-attributes para passar IDs — evita problemas de escaping no onclick
   function buildTable(containerId, columns, data, actions = []) {
     const container = el(containerId);
     if (!container) return;
@@ -110,21 +111,21 @@ const Utils = (() => {
     }
 
     const thead = columns.map(c => `<th>${c.label}</th>`).join('');
-    const tbody = data.map(row => {
+    const tbody = data.map((row, rowIdx) => {
       const cells = columns.map(c => {
-        const val = c.render ? c.render(row[c.key], row) : (row[c.key] || '—');
+        const val = c.render ? c.render(row[c.key], row) : (row[c.key] !== undefined && row[c.key] !== null && row[c.key] !== '' ? row[c.key] : '—');
         return `<td>${val}</td>`;
       }).join('');
-      // Lê o ID directamente do objecto row (não das células renderizadas)
+
+      // Usa data-row-index para referenciar a linha — evita qualquer problema de escaping de UUIDs
       const btns = actions.map(a => {
-        const idKey = a.idKey || columns[0].key;
-        const idVal = String(row[idKey] || '').replace(/'/g, "\'");
-        return `<button class="btn-action btn-${a.type}" onclick="${a.fn}('${idVal}')">${a.label}</button>`;
+        return `<button class="btn-action btn-${a.type}" data-row="${rowIdx}" data-fn="${a.fn}" data-idkey="${a.idKey||'id'}">${a.label}</button>`;
       }).join(' ');
+
       return `<tr>${cells}${actions.length ? `<td class="actions-cell">${btns}</td>` : ''}</tr>`;
     }).join('');
 
-    const actionHeader = actions.length ? '<th>Acções</th>' : '';
+    const actionHeader = actions.length ? '<th></th>' : '';
 
     container.innerHTML = `
       <div class="table-search-bar">
@@ -138,6 +139,31 @@ const Utils = (() => {
         </table>
       </div>
     `;
+
+    // Adiciona event listeners depois de injectar o HTML
+    // Lê o ID do objecto data[] directamente — sem escaping
+    container.querySelectorAll('.btn-action[data-fn]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const rowIdx = parseInt(btn.dataset.row, 10);
+        const idKey  = btn.dataset.idkey || 'id';
+        const fnName = btn.dataset.fn;
+        const row    = data[rowIdx];
+        const idVal  = row ? row[idKey] : null;
+
+        if (!idVal) {
+          console.error('[buildTable] ID não encontrado:', { idKey, row, rowIdx });
+          Toast.show('Erro: ID do registo não encontrado', 'error');
+          return;
+        }
+
+        const fn = window[fnName];
+        if (typeof fn === 'function') {
+          fn(idVal);
+        } else {
+          console.error('[buildTable] Função não encontrada:', fnName);
+        }
+      });
+    });
   }
 
   function _filterTable(input, containerId) {
